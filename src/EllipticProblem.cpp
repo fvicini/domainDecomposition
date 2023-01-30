@@ -11,6 +11,8 @@
 
 #include "mpi.h"
 
+#include "DD_Utilities.hpp"
+
 using namespace std;
 using namespace Eigen;
 
