@@ -15,25 +15,23 @@ int main(int argc, char** argv)
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-  std::cout.precision(4);
-  std::cout<< std::scientific<< "Process "<< rank<< std::endl;
+  // Register program configuration
+  const DOMAIN_DECOMPOSITION::EllipticProblem_ProgramConfiguration programConfiguration;
 
-  //  // Register program configuration
-  //  const METODI_FEM_2D::EllipticProblem_ProgramConfiguration programConfiguration;
+  if (rank == 0)
+  {
+    // Export parameters to file
+    Gedim::Configurations::ExportToIni("./Parameters.ini");
+  }
 
-  //  // Import Parameters
-  //  if (!Gedim::Output::FileExists("./Parameters.ini"))
-  //    Gedim::Configurations::ExportToIni("./Parameters.ini",
-  //                                       false);
-  //  else
-  //    Gedim::Configurations::InitializeFromIni("./Parameters.ini");
-  //  Gedim::Configurations::Initialize(argc, argv);
+  // Import Parameters
+  Gedim::Configurations::Initialize(argc, argv);
 
-  //  METODI_FEM_2D::EllipticProblem program(programConfiguration);
-  //  program.Run();
+  DOMAIN_DECOMPOSITION::EllipticProblem program(programConfiguration);
+  program.Run(rank);
 
-  //  // Close Program
-  //  Gedim::Configurations::Reset();
+  // Close Program
+  Gedim::Configurations::Reset();
 
   MPI_Finalize();
 

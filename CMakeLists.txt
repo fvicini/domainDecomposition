@@ -57,10 +57,6 @@ find_package(tetgen CONFIG REQUIRED)
 find_package(MPI REQUIRED) # Find the MPI library
 list(APPEND ${DOMAIN_DECOMPOSITION_LINKED_LIBRARIES} PUBLIC MPI::MPI_CXX)
 
-### Openmp
-find_package(OpenMP) # Find the OpenMP library
-list(APPEND ${DOMAIN_DECOMPOSITION_LINKED_LIBRARIES} PUBLIC OpenMP::OpenMP_CXX)
-
 # Insert Sources
 ###############################################################################################
 add_subdirectory(src)

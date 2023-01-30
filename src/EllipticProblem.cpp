@@ -9,10 +9,12 @@
 #include "Eigen_Array.hpp"
 #include "Eigen_CholeskySolver.hpp"
 
+#include "mpi.h"
+
 using namespace std;
 using namespace Eigen;
 
-namespace METODI_FEM_2D
+namespace DOMAIN_DECOMPOSITION
 {
   // ***************************************************************************
   EllipticProblem_ProgramConfiguration::EllipticProblem_ProgramConfiguration()
@@ -23,13 +25,24 @@ namespace METODI_FEM_2D
                                        "Folder where to export data (Default: ./Export)");
     // Geometric parameters
     Gedim::Configurations::AddProperty("GeometricTolerance",
-                                       numeric_limits<double>::epsilon(),
+                                       1.0e-8,
                                        "Geometric tolerance to perform 1D operations (Default: machine epsilon)");
 
     // Mesh parameters
-    Gedim::Configurations::AddProperty("MeshMaximumTriangleArea",
-                                       0.1,
-                                       "Mesh 2D maximum triangle area (Default: 0.1)");
+    Gedim::Configurations::AddProperty("MeshParameter",
+                                       0.25,
+                                       "Mesh Parameter (Default: 0.25)");
+  }
+  // ***************************************************************************
+  void EllipticProblem::PrintMessage(const int& rank,
+                                     ostream& output,
+                                     const string& message,
+                                     const bool& onlyMaster)
+  {
+    if (onlyMaster && rank != 0)
+      return;
+
+    output<< ">> "<< "Process "<< rank<< ": "<< message<< endl;
   }
   // ***************************************************************************
   EllipticProblem::EllipticProblem(const EllipticProblem_ProgramConfiguration& config) :
@@ -40,74 +53,151 @@ namespace METODI_FEM_2D
   {
   }
   // ***************************************************************************
-  void EllipticProblem::Run()
+  void EllipticProblem::Run(const int& rank)
   {
     Gedim::GeometryUtilitiesConfig geometryUtilitiesConfig;
     geometryUtilitiesConfig.Tolerance = config.GeometricTolerance();
     Gedim::GeometryUtilities geometryUtilities(geometryUtilitiesConfig);
     Gedim::MeshUtilities meshUtilities;
 
-    /// Create folders
+    /// Create folders˝
     const string exportFolder = config.ExportFolder();
-    Gedim::Output::CreateFolder(exportFolder);
+    if (rank == 0)
+      Gedim::Output::CreateFolder(exportFolder);
 
     const string exportCsvFolder = exportFolder + "/Mesh";
-    Gedim::Output::CreateFolder(exportCsvFolder);
+    if (rank == 0)
+      Gedim::Output::CreateFolder(exportCsvFolder);
     const string exportVtuFolder = exportFolder + "/Paraview";
-    Gedim::Output::CreateFolder(exportVtuFolder);
+    if (rank == 0)
+      Gedim::Output::CreateFolder(exportVtuFolder);
     const string exportSolutionFolder = exportFolder + "/Solution";
-    Gedim::Output::CreateFolder(exportSolutionFolder);
+    if (rank == 0)
+      Gedim::Output::CreateFolder(exportSolutionFolder);
 
     const string logFolder = exportFolder + "/Log";
 
     /// Export Configuration of the following Run
-    Gedim::Configurations::ExportToIni(exportFolder + "/Parameters.ini",
-                                       false);
+    if (rank == 0)
+      Gedim::Configurations::ExportToIni(exportFolder + "/Parameters.ini",
+                                         false);
 
     /// Set Log folder
-    Gedim::Output::CreateFolder(logFolder);
+    if (rank == 0)
+      Gedim::Output::CreateFolder(logFolder);
     Gedim::LogFile::LogFolder = logFolder;
 
-    /// Get problem data
-    const Eigen::MatrixXd domain = geometryUtilities.CreateSquare(Eigen::Vector3d(0.0, 0.0, 0.0),
-                                                                  1.0);
+    /// Create problem
+    PrintMessage(rank, cout, "Create Domain...", false);
+
+    const Eigen::Vector3d rectangleOrigin(0.0, 0.0, 0.0);
+    const Eigen::Vector3d rectangleBase(1.0, 0.0, 0.0);
+    const Eigen::Vector3d rectangleHeight(0.0, 1.0, 0.0);
+
+    const Eigen::MatrixXd domain = geometryUtilities.CreateParallelogram(rectangleOrigin,
+                                                                         rectangleBase,
+                                                                         rectangleHeight);
+
+    PrintMessage(rank, cout, "Create Domain SUCCESS", false);
 
     // Export domain
+    PrintMessage(rank, cout, "Export Domain...", true);
+    if (rank == 0)
     {
       Gedim::VTKUtilities vtkUtilities;
       vtkUtilities.AddPolygon(domain);
       vtkUtilities.Export(exportVtuFolder + "/Domain.vtu");
     }
+    PrintMessage(rank, cout, "Export Domain SUCCESS", true);
 
     /// Create domain mesh
-    Gedim::Output::PrintGenericMessage("Create Domain Mesh...", true);
+    PrintMessage(rank, cout,
+                 "Create Domain Mesh with parameter " +
+                 to_string(config.MeshParameter()) +
+                 "...", false);
 
     Gedim::MeshMatrices domainMeshData;
     Gedim::MeshMatricesDAO domainMesh(domainMeshData);
 
-    meshUtilities.CreateTriangularMesh(domain,
-                                       config.MeshMaximumTriangleArea(),
-                                       domainMesh);
+    const vector<double> baseCoordinates = geometryUtilities.EquispaceCoordinates(config.MeshParameter(), true);
+
+    meshUtilities.CreateRectangleMesh(rectangleOrigin,
+                                      rectangleBase,
+                                      rectangleHeight,
+                                      baseCoordinates,
+                                      baseCoordinates,
+                                      domainMesh);
+
+    const unsigned int n_1D_points = baseCoordinates.size();
+    const unsigned int n_1D_squares = n_1D_points - 1;
+    const unsigned int n_2D_points = domainMesh.Cell0DTotalNumber();
+    const unsigned int n_2D_squares = domainMesh.Cell2DTotalNumber();
+
+    PrintMessage(rank,
+                 cerr,
+                 "n_1D_points: " +
+                 to_string(n_1D_points) + " " +
+                 "n_1D_squares: " +
+                 to_string(n_1D_squares) + " " +
+                 "n_2D_points: " +
+                 to_string(n_2D_points) + " " +
+                 "n_2D_squares: " +
+                 to_string(n_2D_squares)
+                 , true);
+
+    if (n_1D_squares % 2 > 0)
+    {
+      PrintMessage(rank, cerr, "n_1D_squares shall be even", true);
+      MPI_Abort(MPI_COMM_WORLD, -1);
+    }
+
+    PrintMessage(rank, cout, "Create Domain Mesh SUCCESS", false);
 
     // Export the domain mesh
-    meshUtilities.ExportMeshToVTU(domainMesh,
-                                  exportVtuFolder,
-                                  "Domain_Mesh");
+    PrintMessage(rank, cout, "Export Domain Mesh...", true);
+    if (rank == 0)
+    {
+      meshUtilities.ExportMeshToVTU(domainMesh,
+                                    exportVtuFolder,
+                                    "Domain_Mesh");
+    }
+    PrintMessage(rank, cout, "Export Domain Mesh SUCCESS", true);
 
-    Gedim::Output::PrintStatusProgram("Create Domain Mesh");
+    PrintMessage(rank, cout, "Create Domain Mesh SUCCESS", false);
 
-    Gedim::Output::PrintGenericMessage("Compute domain geometric properties...", true);
-
+    PrintMessage(rank, cout, "Compute domain geometric properties...", false);
     Gedim::MeshUtilities::MeshGeometricData2D meshGeometricData = meshUtilities.FillMesh2DGeometricData(geometryUtilities,
                                                                                                         domainMesh);
 
-    const double h = *max_element(std::begin(meshGeometricData.Cell2DsAreas),
-                                  std::end(meshGeometricData.Cell2DsAreas));
+    PrintMessage(rank, cout, "Compute domain geometric properties SUCCESS", false);
 
-    Gedim::Output::PrintStatusProgram("Compute domain geometric properties");
+    /// Split mesh among processes
+    int num_processes;
+    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
+
+    const unsigned int num_domains = sqrt(num_processes);
+
+    PrintMessage(rank,
+                 cerr,
+                 "numProcesses: " +
+                 to_string(num_processes) + " " +
+                 "num_domains: " +
+                 to_string(num_domains)
+                 , true);
+
+    const unsigned int n_1D_squares_x_Domain = n_1D_squares / num_domains;
+    const unsigned int n_1D_points_x_Domain = n_1D_squares_x_Domain + 1;
+
+    PrintMessage(rank,
+                 cerr,
+                 "n_1D_points_x_Domain: " +
+                 to_string(n_1D_points_x_Domain) + " " +
+                 "n_1D_squares_x_Domain: " +
+                 to_string(n_1D_squares_x_Domain)
+                 , true);
 
     /// Assemble System
-    Gedim::Output::PrintGenericMessage("Assemble System FEM...", true);
+    PrintMessage(rank, cout, "Assemble System FEM...", false);
 
     double numDofs = 0;
 
@@ -122,10 +212,10 @@ namespace METODI_FEM_2D
       solution.SetSize(numDofs);
     }
 
-    Gedim::Output::PrintStatusProgram("Assemble System");
+    PrintMessage(rank, cout, "Assemble System FEM SUCCESS", false);
 
     /// Solve
-    Gedim::Output::PrintGenericMessage("Solve...", true);
+    PrintMessage(rank, cout, "Solve...", false);
 
     if (numDofs > 0)
     {
@@ -136,7 +226,7 @@ namespace METODI_FEM_2D
       choleskySolver.Solve();
     }
 
-    Gedim::Output::PrintStatusProgram("Solve");
+    PrintMessage(rank, cout, "Solve SUCCESS", false);
   }
   // ***************************************************************************
 }
