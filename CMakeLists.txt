@@ -17,6 +17,7 @@ endif()
 ###############################################################################################
 
 ## GeDiM
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/gedim/GeDiM)
 if (NOT TARGET GeDiM::GeDiM)
 	find_package(GeDiM CONFIG REQUIRED)
 	list(APPEND ${DOMAIN_DECOMPOSITION_LINKED_LIBRARIES} PRIVATE GeDiM::GeDiM)
