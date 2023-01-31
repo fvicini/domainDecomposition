@@ -32,7 +32,7 @@ namespace DOMAIN_DECOMPOSITION
         forcingTermValues;
   }
   // ***************************************************************************
-  Eigen::VectorXd ForcingTerm(const Eigen::MatrixXd& points)
+  VectorXd PDE_Equation::ForcingTerm(const Eigen::MatrixXd& points)
   {
     return 32.0 * (points.row(1).array() * (1.0 - points.row(1).array()) +
                    points.row(0).array() * (1.0 - points.row(0).array()));
