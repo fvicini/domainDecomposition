@@ -158,7 +158,8 @@ namespace DOMAIN_DECOMPOSITION
     }
   }
   // ***************************************************************************
-  DD_Utilities::DOF_Info DD_Utilities::CreateDOFs(const unsigned int& n_1D_points,
+  DD_Utilities::DOF_Info DD_Utilities::CreateDOFs(const int& n_domains,
+                                                  const unsigned int& n_1D_points,
                                                   const unsigned int& n_1D_squares,
                                                   const unsigned int& n_1D_domains,
                                                   const unsigned int& n_1D_points_domain,
@@ -167,11 +168,15 @@ namespace DOMAIN_DECOMPOSITION
   {
     DOF_Info info;
 
+    // initialize
     info.Num_Dirichlets = 0; // all external borders are dirichlets
     info.Num_Internals = 0;
     info.Num_Gamma = 0;
-
+    info.Num_Globals = globalMesh.Cell0DTotalNumber();
     info.Cell0Ds_Type.resize(globalMesh.Cell0DTotalNumber(), DOF_Info::Types::Unknwon);
+    info.Cell0Ds_GlobalIndex.resize(globalMesh.Cell0DTotalNumber(), 0);
+
+    // check mesh points type
     for (unsigned int i = 0; i < n_1D_points; i++)
     {
       for (unsigned int j = 0; j < n_1D_points; j++)
@@ -198,7 +203,107 @@ namespace DOMAIN_DECOMPOSITION
       }
     }
 
+    // numerate dirichlet and gamma points
+    unsigned int dirichlet_counter = 0;
+    unsigned int gamma_counter = 0;
+    for (unsigned int p = 0; p < globalMesh.Cell0DTotalNumber(); p++)
+    {
+      switch (info.Cell0Ds_Type[p])
+      {
+        case DOF_Info::Types::Dirichlet:
+          info.Cell0Ds_GlobalIndex[p] = info.Num_Internals +
+                                        info.Num_Gamma +
+                                        dirichlet_counter++;
+          break;
+        case DOF_Info::Types::Gamma:
+          info.Cell0Ds_GlobalIndex[p] = info.Num_Internals +
+                                        gamma_counter++;
+          break;
+        case DOF_Info::Types::Internal:
+          continue;
+        default:
+          throw runtime_error("unkwnon point type");
+      }
+    }
+
+    Gedim::Output::Assert(dirichlet_counter == info.Num_Dirichlets);
+    Gedim::Output::Assert(gamma_counter == info.Num_Gamma);
+
+    // numerate internal dofs with processes order
+    unsigned int internal_counter = 0;
+    for (unsigned int rank = 0; rank < n_domains; rank++)
+    {
+      for (unsigned int j_domain = 0; j_domain < n_1D_points_domain; j_domain++)
+      {
+        for (unsigned int i_domain = 0; i_domain < n_1D_points_domain; i_domain++)
+        {
+          const Domain_Info domain_info = GetDomain_Info_Global(rank,
+                                                                i_domain,
+                                                                j_domain,
+                                                                n_1D_domains,
+                                                                n_1D_squares_domain);
+
+          const Point_Info point_info = Point_Info_Global(domain_info.Axes_Index.at(0),
+                                                          domain_info.Axes_Index.at(1),
+                                                          n_1D_points);
+
+          switch (info.Cell0Ds_Type[point_info.Index])
+          {
+            case DOF_Info::Types::Dirichlet:
+            case DOF_Info::Types::Gamma:
+              continue;
+            case DOF_Info::Types::Internal:
+              info.Cell0Ds_GlobalIndex[point_info.Index] = internal_counter++;
+              break;
+            default:
+              throw runtime_error("unkwnon point type");
+          }
+        }
+      }
+    }
+
+    Gedim::Output::Assert(internal_counter == info.Num_Internals);
+
     return info;
+  }
+  // ***************************************************************************
+  void DD_Utilities::ExportDOFsToVtu(const DOF_Info& dofs,
+                                     const Gedim::IMeshDAO& globalMesh,
+                                     const std::string& exportFolder)
+  {
+    {
+      Gedim::VTKUtilities exporter;
+
+      vector<double> dofsType(globalMesh.Cell0DTotalNumber());
+      vector<double> dofsIndex(globalMesh.Cell0DTotalNumber());
+
+      for (unsigned int p = 0; p < globalMesh.Cell0DTotalNumber(); p++)
+      {
+        dofsType[p] = (double)dofs.Cell0Ds_Type[p];
+        dofsIndex[p] = dofs.Cell0Ds_GlobalIndex[p];
+      }
+
+      exporter.AddPoints(globalMesh.Cell0DsCoordinates(),
+                         {
+                           {
+                             "DofType",
+                             Gedim::VTPProperty::Formats::Cells,
+                             static_cast<unsigned int>(dofsType.size()),
+                             dofsType.data()
+                           },
+                           {
+                             "DofIndex",
+                             Gedim::VTPProperty::Formats::Cells,
+                             static_cast<unsigned int>(dofsIndex.size()),
+                             dofsIndex.data()
+                           }
+                         });
+
+      exporter.Export(exportFolder +
+                      "/DOFs_" +
+                      "Mesh_Cell0Ds" +
+                      ".vtu");
+    }
   }
   // ***************************************************************************
 }

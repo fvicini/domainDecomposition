@@ -39,7 +39,9 @@ namespace DOMAIN_DECOMPOSITION
           unsigned int Num_Dirichlets;
           unsigned int Num_Internals;
           unsigned int Num_Gamma;
+          unsigned int Num_Globals;
           std::vector<Types> Cell0Ds_Type;
+          std::vector<unsigned int> Cell0Ds_GlobalIndex;
       };
 
     private:
@@ -87,12 +89,17 @@ namespace DOMAIN_DECOMPOSITION
                                     const Gedim::IMeshDAO& globalMesh,
                                     const std::string& exportFolder);
 
-      static DOF_Info CreateDOFs(const unsigned int& n_1D_points,
+      static DOF_Info CreateDOFs(const int& n_domains,
+                                 const unsigned int& n_1D_points,
                                  const unsigned int& n_1D_squares,
                                  const unsigned int& n_1D_domains,
                                  const unsigned int& n_1D_points_domain,
                                  const unsigned int& n_1D_squares_domain,
                                  const Gedim::IMeshDAO& globalMesh);
+
+      static void ExportDOFsToVtu(const DOF_Info& dofs,
+                                  const Gedim::IMeshDAO& globalMesh,
+                                  const std::string& exportFolder);
   };
 
 }
