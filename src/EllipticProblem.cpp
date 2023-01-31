@@ -204,6 +204,7 @@ namespace DOMAIN_DECOMPOSITION
                                     n_1D_points,
                                     n_1D_squares,
                                     n_1D_domains,
+                                    n_1D_points_domain,
                                     n_1D_squares_domain,
                                     domainMesh,
                                     exportVtuDomainFolder);
