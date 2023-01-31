@@ -1,6 +1,7 @@
 #include "DD_Utilities.hpp"
 
 #include "Fem2DSquareLagrangePCC.hpp"
+#include "PDE_Equation.hpp"
 #include "VTKUtilities.hpp"
 #include "MapQuadrilateral.hpp"
 #include "Quadrature_Gauss2D_Square.hpp"
@@ -377,6 +378,7 @@ namespace DOMAIN_DECOMPOSITION
     {
       for (unsigned int i_domain = 0; i_domain < problem_info.Num_1D_squares_domain; i_domain++)
       {
+        // get mesh square
         const Domain_Info domain_info = GetDomain_Info_Global(rank,
                                                               i_domain,
                                                               j_domain,
@@ -388,15 +390,20 @@ namespace DOMAIN_DECOMPOSITION
                                                            problem_info.Num_1D_points,
                                                            problem_info.Num_1D_squares);
 
+        // get square geometric properties
         const Eigen::MatrixXd& square_Vertices = squaresVertices.at(square_info.Index);
         const double& square_Area = squaresArea.at(square_info.Index);
 
+        // compute reference_element -> square map
         SquareMapping::Map map = mapping.Compute(square_Vertices,
                                                  square_Area);
 
+        // map quadrature points and weights
         const Eigen::MatrixXd square_quadraturePoints = mapping.F(map,
                                                                   referenceSquare_quadraturePoints);
+        const Eigen::VectorXd square_quadratureWeights = referenceSquare_quadratureWeights * abs(map.detQ);
 
+        // map reference_element FEM basis functions
         const Eigen::MatrixXd square_basisFunctions_Values =
             fem2D.Map_BasisFunctions(localSpace,
                                      map,
@@ -406,6 +413,16 @@ namespace DOMAIN_DECOMPOSITION
             fem2D.Map_BasisFunctionDerivatives(localSpace,
                                                map,
                                                referenceSquare_BasisFunctionDerivateValues);
+
+        // compute equation elements
+        const Eigen::VectorXd forcingTermValues = PDE_Equation::ForcingTerm(square_quadraturePoints);
+
+        const Eigen::MatrixXd A = PDE_Equation::ComputeStiffnessMatrix(4,
+                                                                       square_basisFunctions_derivativeValues,
+                                                                       square_quadratureWeights);
+        const Eigen::VectorXd f = PDE_Equation::ComputeCellForcingTerm(forcingTermValues,
+                                                                       square_basisFunctions_Values,
+                                                                       square_quadratureWeights);
 
       }
     }
