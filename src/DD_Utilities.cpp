@@ -416,7 +416,7 @@ namespace DOMAIN_DECOMPOSITION
         // compute equation elements
         const Eigen::VectorXd forcingTermValues = PDE_Equation::ForcingTerm(square_quadraturePoints);
 
-        const Eigen::MatrixXd A = PDE_Equation::ComputeStiffnessMatrix(4,
+        const Eigen::MatrixXd A = PDE_Equation::ComputeStiffnessMatrix(localSpace.NumberBasisFunctions,
                                                                        square_basisFunctions_derivativeValues,
                                                                        square_quadratureWeights);
         const Eigen::VectorXd f = PDE_Equation::ComputeCellForcingTerm(forcingTermValues,
@@ -424,7 +424,7 @@ namespace DOMAIN_DECOMPOSITION
                                                                        square_quadratureWeights);
 
         // insert local matrix into global matrix
-        for (unsigned int i_loc = 0; i_loc < 4; i_loc++)
+        for (unsigned int i_loc = 0; i_loc < localSpace.NumberBasisFunctions; i_loc++)
         {
           const unsigned int i_mesh_point_index = square_info.Points_Index.at(i_loc);
 
@@ -441,7 +441,7 @@ namespace DOMAIN_DECOMPOSITION
           rightHandSide.AddValue(i_glb,
                                  f[i_loc]);
 
-          for (unsigned int j_loc = 0; j_loc < 4; j_loc++)
+          for (unsigned int j_loc = 0; j_loc < localSpace.NumberBasisFunctions; j_loc++)
           {
             const unsigned int j_mesh_point_index = square_info.Points_Index.at(j_loc);
 
@@ -465,6 +465,115 @@ namespace DOMAIN_DECOMPOSITION
 
     rightHandSide.Create();
     globalMatrixA.Create();
+  }
+  // ***************************************************************************
+  void DD_Utilities::ComputeErrors(const int& rank,
+                                   const Problem_Info& problem_info,
+                                   const Gedim::IMeshDAO& globalMesh,
+                                   const std::vector<Eigen::MatrixXd>& squaresVertices,
+                                   const std::vector<double>& squaresArea,
+                                   const DOF_Info& dofs,
+                                   const Gedim::IArray& internalSolution,
+                                   Eigen::VectorXd& errorL2,
+                                   Eigen::VectorXd& errorH1)
+  {
+    errorL2 = Eigen::VectorXd::Zero(globalMesh.Cell2DTotalNumber());
+    errorH1 = Eigen::VectorXd::Zero(globalMesh.Cell2DTotalNumber());
+
+    Eigen::MatrixXd referenceSquare_quadraturePoints;
+    Eigen::VectorXd referenceSquare_quadratureWeights;
+    Gedim::Quadrature_Gauss2D_Square::FillPointsAndWeights(2,
+                                                           referenceSquare_quadraturePoints,
+                                                           referenceSquare_quadratureWeights);
+
+    Fem2DSquareLagrangePCC fem2D;
+    const Fem2DSquareLagrangePCC::LocalSpace localSpace = fem2D.Compute();
+    Eigen::MatrixXd referenceSquare_BasisFunctionValues = fem2D.Reference_BasisFunctions(localSpace,
+                                                                                         referenceSquare_quadraturePoints);
+    vector<Eigen::MatrixXd> referenceSquare_BasisFunctionDerivateValues = fem2D.Reference_BasisFunctionDerivatives(localSpace,
+                                                                                                                   referenceSquare_quadraturePoints);
+
+    SquareMapping mapping;
+
+    for (unsigned int j_domain = 0; j_domain < problem_info.Num_1D_squares_domain; j_domain++)
+    {
+      for (unsigned int i_domain = 0; i_domain < problem_info.Num_1D_squares_domain; i_domain++)
+      {
+        // get mesh square
+        const Domain_Info domain_info = GetDomain_Info_Global(rank,
+                                                              i_domain,
+                                                              j_domain,
+                                                              problem_info.Num_1D_domains,
+                                                              problem_info.Num_1D_squares_domain);
+
+        const Square_Info square_info = Square_Info_Global(domain_info.Axes_Index.at(0),
+                                                           domain_info.Axes_Index.at(1),
+                                                           problem_info.Num_1D_points,
+                                                           problem_info.Num_1D_squares);
+
+        // get square geometric properties
+        const Eigen::MatrixXd& square_Vertices = squaresVertices.at(square_info.Index);
+        const double& square_Area = squaresArea.at(square_info.Index);
+
+        // compute reference_element -> square map
+        SquareMapping::Map map = mapping.Compute(square_Vertices,
+                                                 square_Area);
+
+        // map quadrature points and weights
+        const Eigen::MatrixXd square_quadraturePoints = mapping.F(map,
+                                                                  referenceSquare_quadraturePoints);
+        const Eigen::VectorXd square_quadratureWeights = referenceSquare_quadratureWeights * abs(map.detQ);
+
+        // map reference_element FEM basis functions
+        const Eigen::MatrixXd square_basisFunctions_Values =
+            fem2D.Map_BasisFunctions(localSpace,
+                                     map,
+                                     referenceSquare_BasisFunctionValues);
+
+        const std::vector<Eigen::MatrixXd> square_basisFunctions_derivativeValues =
+            fem2D.Map_BasisFunctionDerivatives(localSpace,
+                                               map,
+                                               referenceSquare_BasisFunctionDerivateValues);
+
+        // compute equation elements
+        const Eigen::VectorXd exactSolution = PDE_Equation::ExactSolution(square_quadraturePoints);
+        const Eigen::VectorXd exactDerivativeSolution_X = PDE_Equation::ExactDerivativeSolution(0,
+                                                                                                square_quadraturePoints);
+        const Eigen::VectorXd exactDerivativeSolution_Y = PDE_Equation::ExactDerivativeSolution(1,
+                                                                                                square_quadraturePoints);
+
+        // compute local numerical solution
+        Eigen::VectorXd localNumericSolution = Eigen::VectorXd::Zero(localSpace.NumberBasisFunctions);
+        for (unsigned int i_loc = 0; i_loc < localSpace.NumberBasisFunctions; i_loc++)
+        {
+          const unsigned int i_mesh_point_index = square_info.Points_Index.at(i_loc);
+
+          if (dofs.Cell0Ds_DOF[i_mesh_point_index].Type ==
+              DOF_Info::DOF::Types::Dirichlet)
+            continue;
+
+          const unsigned int i_glb = dofs.Cell0Ds_DOF[i_mesh_point_index].Type ==
+                                     DOF_Info::DOF::Types::Internal ?
+                                       dofs.Cell0Ds_DOF[i_mesh_point_index].GlobalIndex :
+                                       dofs.Num_Internals +
+                                       dofs.Cell0Ds_DOF[i_mesh_point_index].GlobalIndex;
+
+          localNumericSolution[i_loc] = internalSolution[i_glb];
+        }
+
+        Eigen::VectorXd localErrorL2 = (square_basisFunctions_Values * localNumericSolution -
+                                        exactSolution).array().square();
+
+        Eigen::VectorXd localErrorH1 = Eigen::VectorXd::Zero(square_quadraturePoints.cols());
+        localErrorH1.array() += (square_basisFunctions_derivativeValues[0] * localNumericSolution -
+                                exactDerivativeSolution_X).array().square();
+        localErrorH1.array() += (square_basisFunctions_derivativeValues[1] * localNumericSolution -
+                                exactDerivativeSolution_Y).array().square();
+
+        errorL2[square_info.Index] = square_quadratureWeights.transpose() * localErrorL2;
+        errorH1[square_info.Index] = square_quadratureWeights.transpose() * localErrorH1;
+      }
+    }
   }
   // ***************************************************************************
   void DD_Utilities::ExportSolutionToVtu(const int& rank,

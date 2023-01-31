@@ -133,6 +133,16 @@ namespace DOMAIN_DECOMPOSITION
                            Gedim::ISparseArray& globalMatrixA,
                            Gedim::IArray& rightHandSide);
 
+      static void ComputeErrors(const int& rank,
+                                const Problem_Info& problem_info,
+                                const Gedim::IMeshDAO& globalMesh,
+                                const std::vector<Eigen::MatrixXd>& squaresVertices,
+                                const std::vector<double>& squaresArea,
+                                const DOF_Info& dofs,
+                                const Gedim::IArray& internalSolution,
+                                Eigen::VectorXd& errorL2,
+                                Eigen::VectorXd& errorH1);
+
       static void ExportSolutionToVtu(const int& rank,
                                       const Problem_Info& problem_info,
                                       const DOF_Info& dofs,

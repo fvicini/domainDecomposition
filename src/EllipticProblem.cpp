@@ -252,6 +252,33 @@ namespace DOMAIN_DECOMPOSITION
 
     DD_Utilities::PrintMessage(rank, cout, "Solve SUCCESS", false);
 
+    DD_Utilities::PrintMessage(rank, cout, "Compute Errors...", false);
+
+    Eigen::VectorXd errorL2_mesh, errorH1_mesh;
+    DD_Utilities::ComputeErrors(rank,
+                                problem_info,
+                                domainMesh,
+                                meshGeometricData.Cell2DsVertices,
+                                meshGeometricData.Cell2DsAreas,
+                                dofs,
+                                internalSolution,
+                                errorL2_mesh,
+                                errorH1_mesh);
+
+    const double errorL2 = sqrt(errorL2_mesh.sum());
+    const double errorH1 = sqrt(errorH1_mesh.sum());
+
+    DD_Utilities::PrintMessage(rank,
+                               cerr,
+                               "errorL2: " +
+                               to_string(errorL2) + " " +
+                               "errorH1: " +
+                               to_string(errorH1),
+                               true);
+
+    // Export the local domain mesh
+    DD_Utilities::PrintMessage(rank, cout, "Compute Errors SUCCESS", false);
+
     DD_Utilities::PrintMessage(rank, cout, "Export Local Solution...", false);
 
     DD_Utilities::ExportSolutionToVtu(rank,
