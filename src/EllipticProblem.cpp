@@ -198,7 +198,7 @@ namespace DOMAIN_DECOMPOSITION
                  , true);
 
     // Export the local domain mesh
-    PrintMessage(rank, cout, "Export Local Domain Mesh...", true);
+    PrintMessage(rank, cout, "Export Local Domain Mesh...", false);
 
     DD_Utilities::ExportDomainToVtu(rank,
                                     n_1D_points,
@@ -208,7 +208,23 @@ namespace DOMAIN_DECOMPOSITION
                                     n_1D_squares_domain,
                                     domainMesh,
                                     exportVtuDomainFolder);
-    PrintMessage(rank, cout, "Export Local Domain Mesh SUCCESS", true);
+    PrintMessage(rank, cout, "Export Local Domain Mesh SUCCESS", false);
+
+    // Compute DOFs
+    DD_Utilities::DOF_Info dofs = DD_Utilities::CreateDOFs(n_1D_points,
+                                                           n_1D_squares,
+                                                           n_1D_domains,
+                                                           n_1D_points_domain,
+                                                           n_1D_squares_domain,
+                                                           domainMesh);
+    PrintMessage(rank,
+                 cerr,
+                 "dofs.Num_Dirichlets: " +
+                 to_string(dofs.Num_Dirichlets) + " " +
+                 "dofs.Num_Internals: " +
+                 to_string(dofs.Num_Internals) + " " +
+                 "dofs.Num_Gamma: " +
+                 to_string(dofs.Num_Gamma), true);
 
     /// Assemble System
     PrintMessage(rank, cout, "Assemble System FEM...", false);

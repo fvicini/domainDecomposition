@@ -158,22 +158,47 @@ namespace DOMAIN_DECOMPOSITION
     }
   }
   // ***************************************************************************
-  void DD_Utilities::CreateDOFs(const unsigned int& n_1D_points,
-                                const unsigned int& n_1D_squares,
-                                const unsigned int& n_1D_domains,
-                                const Gedim::IMeshDAO& globalMesh)
+  DD_Utilities::DOF_Info DD_Utilities::CreateDOFs(const unsigned int& n_1D_points,
+                                                  const unsigned int& n_1D_squares,
+                                                  const unsigned int& n_1D_domains,
+                                                  const unsigned int& n_1D_points_domain,
+                                                  const unsigned int& n_1D_squares_domain,
+                                                  const Gedim::IMeshDAO& globalMesh)
   {
-    unsigned int n_Dirichlets = 4 + (n_1D_points - 2) * 2; // all external borders are dirichlets
-    unsigned int n_Internals = 0;
-    unsigned int n_Gamma = 0;
+    DOF_Info info;
 
-    for (unsigned int i = 1; i < n_1D_points - 1; i++)
+    info.Num_Dirichlets = 0; // all external borders are dirichlets
+    info.Num_Internals = 0;
+    info.Num_Gamma = 0;
+
+    info.Cell0Ds_Type.resize(globalMesh.Cell0DTotalNumber(), DOF_Info::Types::Unknwon);
+    for (unsigned int i = 0; i < n_1D_points; i++)
     {
-      for (unsigned int j = 1; j < n_1D_points - 1; j++)
+      for (unsigned int j = 0; j < n_1D_points; j++)
       {
+        const Point_Info global_info = Point_Info_Global(i, j, n_1D_points);
 
+        if (i == 0 || i == n_1D_points - 1 ||
+            j == 0 || j == n_1D_points - 1)
+        {
+          info.Cell0Ds_Type[global_info.Index] = DOF_Info::Types::Dirichlet;
+          info.Num_Dirichlets++;
+        }
+        else if (i % n_1D_squares_domain == 0 ||
+                 j % n_1D_squares_domain == 0)
+        {
+          info.Cell0Ds_Type[global_info.Index] = DOF_Info::Types::Gamma;
+          info.Num_Gamma++;
+        }
+        else
+        {
+          info.Cell0Ds_Type[global_info.Index] = DOF_Info::Types::Internal;
+          info.Num_Internals++;
+        }
       }
     }
+
+    return info;
   }
   // ***************************************************************************
 }
