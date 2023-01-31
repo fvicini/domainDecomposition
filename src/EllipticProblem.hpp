@@ -33,7 +33,8 @@ namespace DOMAIN_DECOMPOSITION
       EllipticProblem(const EllipticProblem_ProgramConfiguration& config);
       ~EllipticProblem();
 
-      void Run(const int& rank);
+      void Run(const int& rank,
+               const int& n_domains) const;
   };
 
 }

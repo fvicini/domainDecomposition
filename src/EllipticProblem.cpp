@@ -55,7 +55,8 @@ namespace DOMAIN_DECOMPOSITION
   {
   }
   // ***************************************************************************
-  void EllipticProblem::Run(const int& rank)
+  void EllipticProblem::Run(const int& rank,
+                            const int& n_domains) const
   {
     Gedim::GeometryUtilitiesConfig geometryUtilitiesConfig;
     geometryUtilitiesConfig.Tolerance = config.GeometricTolerance();
@@ -73,6 +74,9 @@ namespace DOMAIN_DECOMPOSITION
     const string exportVtuFolder = exportFolder + "/Paraview";
     if (rank == 0)
       Gedim::Output::CreateFolder(exportVtuFolder);
+    const string exportVtuDomainFolder = exportVtuFolder + "/Domains";
+    if (rank == 0)
+      Gedim::Output::CreateFolder(exportVtuDomainFolder);
     const string exportSolutionFolder = exportFolder + "/Solution";
     if (rank == 0)
       Gedim::Output::CreateFolder(exportSolutionFolder);
@@ -165,8 +169,6 @@ namespace DOMAIN_DECOMPOSITION
     }
     PrintMessage(rank, cout, "Export Domain Mesh SUCCESS", true);
 
-    PrintMessage(rank, cout, "Create Domain Mesh SUCCESS", false);
-
     PrintMessage(rank, cout, "Compute domain geometric properties...", false);
     Gedim::MeshUtilities::MeshGeometricData2D meshGeometricData = meshUtilities.FillMesh2DGeometricData(geometryUtilities,
                                                                                                         domainMesh);
@@ -174,29 +176,38 @@ namespace DOMAIN_DECOMPOSITION
     PrintMessage(rank, cout, "Compute domain geometric properties SUCCESS", false);
 
     /// Split mesh among processes
-    int num_processes;
-    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
-
-    const unsigned int num_domains = sqrt(num_processes);
+    const unsigned int n_1D_domains = sqrt(n_domains);
 
     PrintMessage(rank,
                  cerr,
-                 "numProcesses: " +
-                 to_string(num_processes) + " " +
-                 "num_domains: " +
-                 to_string(num_domains)
+                 "n_domains: " +
+                 to_string(n_domains) + " " +
+                 "n_1D_domains: " +
+                 to_string(n_1D_domains)
                  , true);
 
-    const unsigned int n_1D_squares_x_Domain = n_1D_squares / num_domains;
-    const unsigned int n_1D_points_x_Domain = n_1D_squares_x_Domain + 1;
+    const unsigned int n_1D_squares_domain = n_1D_squares / n_1D_domains;
+    const unsigned int n_1D_points_domain = n_1D_squares_domain + 1;
 
     PrintMessage(rank,
                  cerr,
-                 "n_1D_points_x_Domain: " +
-                 to_string(n_1D_points_x_Domain) + " " +
-                 "n_1D_squares_x_Domain: " +
-                 to_string(n_1D_squares_x_Domain)
+                 "n_1D_points_domain: " +
+                 to_string(n_1D_points_domain) + " " +
+                 "n_1D_squares_domain: " +
+                 to_string(n_1D_squares_domain)
                  , true);
+
+    // Export the local domain mesh
+    PrintMessage(rank, cout, "Export Local Domain Mesh...", true);
+
+    DD_Utilities::ExportDomainToVtu(rank,
+                                    n_1D_points,
+                                    n_1D_squares,
+                                    n_1D_domains,
+                                    n_1D_squares_domain,
+                                    domainMesh,
+                                    exportVtuDomainFolder);
+    PrintMessage(rank, cout, "Export Local Domain Mesh SUCCESS", true);
 
     /// Assemble System
     PrintMessage(rank, cout, "Assemble System FEM...", false);
