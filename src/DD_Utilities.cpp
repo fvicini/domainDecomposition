@@ -649,4 +649,37 @@ namespace DOMAIN_DECOMPOSITION
     }
   }
   // ***************************************************************************
+  void DD_Utilities::ExportErrorToStream(const int& rank,
+                                         const unsigned int& femOrder,
+                                         const unsigned int& numCell2Ds,
+                                         const unsigned int& numDofs,
+                                         const double& h,
+                                         const double& errorL2,
+                                         const double& errorH1,
+                                         const bool& printHeader,
+                                         std::ostream& out,
+                                         const char& separator)
+  {
+    if (rank > 0)
+      return;
+
+    if (printHeader)
+    {
+      out<< "FemOrder" << separator;
+      out<< "Cell2Ds" <<  separator;
+      out<< "Dofs" <<  separator;
+      out<< "h" <<  separator;
+      out<< "L2" <<  separator;
+      out<< "H1" << endl;
+    }
+
+    out.precision(16);
+    out<< scientific<< femOrder<< separator;
+    out<< scientific<< numCell2Ds<< separator;
+    out<< scientific<< numDofs<< separator;
+    out<< scientific<< h << separator;
+    out<< scientific<< errorL2<< separator;
+    out<< scientific<< errorH1<< endl;
+  }
+  // ***************************************************************************
 }

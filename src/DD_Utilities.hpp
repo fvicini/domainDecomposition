@@ -149,6 +149,17 @@ namespace DOMAIN_DECOMPOSITION
                                       const Gedim::IMeshDAO& globalMesh,
                                       const Gedim::IArray& internalSolution,
                                       const std::string& exportFolder);
+
+      static void ExportErrorToStream(const int& rank,
+                                      const unsigned int& femOrder,
+                                      const unsigned int& numCell2Ds,
+                                      const unsigned int& numDofs,
+                                      const double& h,
+                                      const double& errorL2,
+                                      const double& errorH1,
+                                      const bool& printHeader,
+                                      std::ostream& out,
+                                      const char& separator);
   };
 
 }

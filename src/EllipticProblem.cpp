@@ -156,6 +156,9 @@ namespace DOMAIN_DECOMPOSITION
     Gedim::MeshUtilities::MeshGeometricData2D meshGeometricData = meshUtilities.FillMesh2DGeometricData(geometryUtilities,
                                                                                                         domainMesh);
 
+    const double h = *max_element(std::begin(meshGeometricData.Cell2DsDiameters),
+                                  std::end(meshGeometricData.Cell2DsDiameters));
+
     DD_Utilities::PrintMessage(rank, cout, "Compute domain geometric properties SUCCESS", false);
 
     DD_Utilities::PrintMessage(rank,
@@ -268,13 +271,35 @@ namespace DOMAIN_DECOMPOSITION
     const double errorL2 = sqrt(errorL2_mesh.sum());
     const double errorH1 = sqrt(errorH1_mesh.sum());
 
-    DD_Utilities::PrintMessage(rank,
-                               cerr,
-                               "errorL2: " +
-                               to_string(errorL2) + " " +
-                               "errorH1: " +
-                               to_string(errorH1),
-                               true);
+    DD_Utilities::ExportErrorToStream(rank,
+                                      1,
+                                      numDofs,
+                                      h,
+                                      errorL2,
+                                      errorH1,
+                                      true,
+                                      cerr,
+                                      ',');
+
+    if (rank == 0)
+    {
+      const string errorFileName = exportSolutionFolder +
+                                   "/Errors.csv";
+      const bool errorFileExists = Gedim::Output::FileExists(errorFileName);
+
+      std::ofstream errorFile(errorFileName,
+                              std::ios_base::app | std::ios_base::out);
+      DD_Utilities::ExportErrorToStream(rank,
+                                        1,
+                                        numDofs,
+                                        h,
+                                        errorL2,
+                                        errorH1,
+                                        true,
+                                        errorFile,
+                                        ',');
+      errorFile.close();
+    }
 
     // Export the local domain mesh
     DD_Utilities::PrintMessage(rank, cout, "Compute Errors SUCCESS", false);
