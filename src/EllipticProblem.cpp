@@ -273,6 +273,7 @@ namespace DOMAIN_DECOMPOSITION
 
     DD_Utilities::ExportErrorToStream(rank,
                                       1,
+                                      domainMesh.Cell2DTotalNumber(),
                                       numDofs,
                                       h,
                                       errorL2,
