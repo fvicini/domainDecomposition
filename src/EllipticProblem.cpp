@@ -292,6 +292,7 @@ namespace DOMAIN_DECOMPOSITION
                               std::ios_base::app | std::ios_base::out);
       DD_Utilities::ExportErrorToStream(rank,
                                         1,
+                                        domainMesh.Cell2DTotalNumber(),
                                         numDofs,
                                         h,
                                         errorL2,
