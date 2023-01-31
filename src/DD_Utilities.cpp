@@ -1,6 +1,9 @@
 #include "DD_Utilities.hpp"
 
+#include "Fem2DSquareLagrangePCC.hpp"
 #include "VTKUtilities.hpp"
+#include "MapQuadrilateral.hpp"
+#include "Quadrature_Gauss2D_Square.hpp"
 
 #include "mpi.h"
 
@@ -67,6 +70,7 @@ namespace DOMAIN_DECOMPOSITION
 
     return info;
   }
+
   // ***************************************************************************
   DD_Utilities::Domain_Info DD_Utilities::GetDomain_Info_Global(const int& rank,
                                                                 const unsigned int& i_domain,
@@ -350,11 +354,28 @@ namespace DOMAIN_DECOMPOSITION
   void DD_Utilities::Assemble(const int& rank,
                               const Problem_Info& problem_info,
                               const Gedim::IMeshDAO& globalMesh,
+                              const std::vector<Eigen::MatrixXd>& squaresVertices,
+                              const std::vector<double>& squaresArea,
                               const DOF_Info& dofs)
   {
-    for (unsigned int j_domain = 0; j_domain < problem_info.Num_1D_points_domain; j_domain++)
+    Eigen::MatrixXd referenceSquare_quadraturePoints;
+    Eigen::VectorXd referenceSquare_quadratureWeights;
+    Gedim::Quadrature_Gauss2D_Square::FillPointsAndWeights(2,
+                                                           referenceSquare_quadraturePoints,
+                                                           referenceSquare_quadratureWeights);
+
+    Fem2DSquareLagrangePCC fem2D;
+    const Fem2DSquareLagrangePCC::LocalSpace localSpace = fem2D.Compute();
+    Eigen::MatrixXd referenceSquare_BasisFunctionValues = fem2D.Reference_BasisFunctions(localSpace,
+                                                                                         referenceSquare_quadraturePoints);
+    vector<Eigen::MatrixXd> referenceSquare_BasisFunctionDerivateValues = fem2D.Reference_BasisFunctionDerivatives(localSpace,
+                                                                                                                   referenceSquare_quadraturePoints);
+
+    SquareMapping mapping;
+
+    for (unsigned int j_domain = 0; j_domain < problem_info.Num_1D_squares_domain; j_domain++)
     {
-      for (unsigned int i_domain = 0; i_domain < problem_info.Num_1D_points_domain; i_domain++)
+      for (unsigned int i_domain = 0; i_domain < problem_info.Num_1D_squares_domain; i_domain++)
       {
         const Domain_Info domain_info = GetDomain_Info_Global(rank,
                                                               i_domain,
@@ -362,10 +383,29 @@ namespace DOMAIN_DECOMPOSITION
                                                               problem_info.Num_1D_domains,
                                                               problem_info.Num_1D_squares_domain);
 
-        const Point_Info point_info = Point_Info_Global(domain_info.Axes_Index.at(0),
-                                                        domain_info.Axes_Index.at(1),
-                                                        problem_info.Num_1D_points);
+        const Square_Info square_info = Square_Info_Global(domain_info.Axes_Index.at(0),
+                                                           domain_info.Axes_Index.at(1),
+                                                           problem_info.Num_1D_points,
+                                                           problem_info.Num_1D_squares);
 
+        const Eigen::MatrixXd& square_Vertices = squaresVertices.at(square_info.Index);
+        const double& square_Area = squaresArea.at(square_info.Index);
+
+        SquareMapping::Map map = mapping.Compute(square_Vertices,
+                                                 square_Area);
+
+        const Eigen::MatrixXd square_quadraturePoints = mapping.F(map,
+                                                                  referenceSquare_quadraturePoints);
+
+        const Eigen::MatrixXd square_basisFunctions_Values =
+            fem2D.Map_BasisFunctions(localSpace,
+                                     map,
+                                     referenceSquare_BasisFunctionValues);
+
+        const std::vector<Eigen::MatrixXd> square_basisFunctions_derivativeValues =
+            fem2D.Map_BasisFunctionDerivatives(localSpace,
+                                               map,
+                                               referenceSquare_BasisFunctionDerivateValues);
 
       }
     }

@@ -124,20 +124,20 @@ namespace DOMAIN_DECOMPOSITION
                                       domainMesh);
 
     // Compute problem info
-    DD_Utilities::Problem_Info problemInfo = DD_Utilities::ComputeProblemInfo(rank,
-                                                                              n_domains,
-                                                                              domainMesh);
+    DD_Utilities::Problem_Info problem_info = DD_Utilities::ComputeProblemInfo(rank,
+                                                                               n_domains,
+                                                                               domainMesh);
 
     DD_Utilities::PrintMessage(rank,
                                cerr,
                                "n_1D_points: " +
-                               to_string(problemInfo.Num_1D_points) + " " +
+                               to_string(problem_info.Num_1D_points) + " " +
                                "n_1D_squares: " +
-                               to_string(problemInfo.Num_1D_squares) + " " +
+                               to_string(problem_info.Num_1D_squares) + " " +
                                "n_2D_points: " +
-                               to_string(problemInfo.Num_2D_points) + " " +
+                               to_string(problem_info.Num_2D_points) + " " +
                                "n_2D_squares: " +
-                               to_string(problemInfo.Num_2D_squares)
+                               to_string(problem_info.Num_2D_squares)
                                , true);
 
     DD_Utilities::PrintMessage(rank, cout, "Create Domain Mesh SUCCESS", false);
@@ -163,22 +163,22 @@ namespace DOMAIN_DECOMPOSITION
                                "n_domains: " +
                                to_string(n_domains) + " " +
                                "n_1D_domains: " +
-                               to_string(problemInfo.Num_1D_domains)
+                               to_string(problem_info.Num_1D_domains)
                                , true);
 
     DD_Utilities::PrintMessage(rank,
                                cerr,
                                "n_1D_points_domain: " +
-                               to_string(problemInfo.Num_1D_points_domain) + " " +
+                               to_string(problem_info.Num_1D_points_domain) + " " +
                                "n_1D_squares_domain: " +
-                               to_string(problemInfo.Num_1D_squares_domain)
+                               to_string(problem_info.Num_1D_squares_domain)
                                , true);
 
     // Export the local domain mesh
     DD_Utilities::PrintMessage(rank, cout, "Export Local Domain Mesh...", false);
 
     DD_Utilities::ExportDomainToVtu(rank,
-                                    problemInfo,
+                                    problem_info,
                                     domainMesh,
                                     exportVtuDomainFolder);
     DD_Utilities::PrintMessage(rank, cout, "Export Local Domain Mesh SUCCESS", false);
@@ -187,7 +187,7 @@ namespace DOMAIN_DECOMPOSITION
     // Compute DOFs
     DD_Utilities::DOF_Info dofs = DD_Utilities::CreateDOFs(rank,
                                                            n_domains,
-                                                           problemInfo,
+                                                           problem_info,
                                                            domainMesh);
     DD_Utilities::PrintMessage(rank, cout, "Compute DOFs SUCCESS", false);
 
@@ -213,6 +213,13 @@ namespace DOMAIN_DECOMPOSITION
 
     /// Assemble System
     DD_Utilities::PrintMessage(rank, cout, "Assemble System FEM...", false);
+
+    DD_Utilities::Assemble(rank,
+                           problem_info,
+                           domainMesh,
+                           meshGeometricData.Cell2DsVertices,
+                           meshGeometricData.Cell2DsAreas,
+                           dofs);
 
     double numDofs = 0;
 

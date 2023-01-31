@@ -3,8 +3,27 @@
 using namespace std;
 using namespace Eigen;
 
-namespace GeDiM
+namespace DOMAIN_DECOMPOSITION
 {
+  // ***************************************************************************
+  SquareMapping::Map SquareMapping::Compute(const Eigen::MatrixXd& vertices,
+                                            const double& area) const
+  {
+    Map map;
+
+    map.Q = Eigen::Matrix3d::Identity();
+    map.Q(0, 0) = sqrt(area);
+    map.Q(1, 1) = map.Q(0, 0);
+
+    map.QInv = Eigen::Matrix3d::Identity();
+    map.QInv(0, 0) = 1.0 / map.Q(0, 0);
+    map.QInv(1, 1) = map.QInv(0, 0);
+
+    map.detQ = area;
+    map.b = vertices.col(0);
+
+    return map;
+  }
   // ***************************************************************************
   Eigen::MatrixXd Fem2DSquareLagrangePCC::EvaluateLambda(const MatrixXd& points) const
   {
@@ -37,15 +56,7 @@ namespace GeDiM
     return gradLambda;
   }
   // ***************************************************************************
-  Fem2DSquareLagrangePCC::Fem2DSquareLagrangePCC()
-  {
-  }
-  Fem2DSquareLagrangePCC::~Fem2DSquareLagrangePCC()
-  {
-
-  }
-  // ***************************************************************************
-  Fem2DSquareLagrangePCC::LocalSpace Fem2DSquareLagrangePCC::Initialize()
+  Fem2DSquareLagrangePCC::LocalSpace Fem2DSquareLagrangePCC::Compute()
   {
     LocalSpace localSpace;
 
@@ -60,8 +71,8 @@ namespace GeDiM
     return localSpace;
   }
   // ***************************************************************************
-  Eigen::MatrixXd Fem2DSquareLagrangePCC::EvaluateBasisFunctions(const Fem2DSquareLagrangePCC::LocalSpace& localSpace,
-                                                                 const MatrixXd& points) const
+  Eigen::MatrixXd Fem2DSquareLagrangePCC::Reference_BasisFunctions(const Fem2DSquareLagrangePCC::LocalSpace& localSpace,
+                                                                   const MatrixXd& points) const
   {
     MatrixXd values = MatrixXd::Zero(points.cols(),
                                      localSpace.NumberBasisFunctions);
@@ -76,8 +87,8 @@ namespace GeDiM
     return values;
   }
   // ***************************************************************************
-  vector<MatrixXd> Fem2DSquareLagrangePCC::EvaluateBasisFunctionDerivatives(const Fem2DSquareLagrangePCC::LocalSpace& localSpace,
-                                                                            const MatrixXd& points) const
+  vector<MatrixXd> Fem2DSquareLagrangePCC::Reference_BasisFunctionDerivatives(const Fem2DSquareLagrangePCC::LocalSpace& localSpace,
+                                                                              const MatrixXd& points) const
   {
     vector<MatrixXd> values(2, MatrixXd::Zero(points.cols(),
                                               localSpace.NumberBasisFunctions));
@@ -115,6 +126,30 @@ namespace GeDiM
         lambda.col(0).array() * gradLambda[1].col(3).array();
 
     return values;
+  }
+  // ***************************************************************************
+  std::vector<MatrixXd> Fem2DSquareLagrangePCC::Map_BasisFunctionDerivatives(const LocalSpace& localSpace,
+                                                                             const SquareMapping::Map& map,
+                                                                             const std::vector<Eigen::MatrixXd>& reference_values) const
+  {
+    std::vector<Eigen::MatrixXd> mapped_values(2,
+                                               Eigen::MatrixXd::Zero(reference_values[0].rows(),
+                                               localSpace.NumberBasisFunctions));
+
+    for(unsigned int i = 0; i < 2; i++)
+    {
+      mapped_values[i] = map.QInv(i,i) *
+                         reference_values[i];
+      for(unsigned int j = 0; j < i; j++)
+      {
+        mapped_values[i] += map.QInv(j,i) *
+                            reference_values[j];
+        mapped_values[j] += map.QInv(i,j) *
+                            reference_values[i];
+      }
+    }
+
+    return mapped_values;
   }
   // ***************************************************************************
 }

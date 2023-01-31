@@ -2,6 +2,7 @@
 #define __DD_Utilities_H
 
 #include "IMeshDAO.hpp"
+#include "MeshUtilities.hpp"
 
 #include <vector>
 
@@ -90,7 +91,6 @@ namespace DOMAIN_DECOMPOSITION
                                                const unsigned int& j_domain,
                                                const unsigned int& n_1D_domains,
                                                const unsigned int& n_1D_squares_domain);
-
     public:
       DD_Utilities();
       ~DD_Utilities();
@@ -125,6 +125,8 @@ namespace DOMAIN_DECOMPOSITION
       static void Assemble(const int& rank,
                            const Problem_Info& problem_info,
                            const Gedim::IMeshDAO& globalMesh,
+                           const std::vector<Eigen::MatrixXd>& squaresVertices,
+                           const std::vector<double>& squaresArea,
                            const DOF_Info& dofs);
   };
 
