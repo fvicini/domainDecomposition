@@ -214,25 +214,27 @@ namespace DOMAIN_DECOMPOSITION
     /// Assemble System
     DD_Utilities::PrintMessage(rank, cout, "Assemble System FEM...", false);
 
-    DD_Utilities::Assemble(rank,
-                           problem_info,
-                           domainMesh,
-                           meshGeometricData.Cell2DsVertices,
-                           meshGeometricData.Cell2DsAreas,
-                           dofs);
-
-    double numDofs = 0;
+    const unsigned int numDofs = dofs.Num_Internals + dofs.Num_Gamma;
 
     Gedim::Eigen_SparseArray<> globalMatrixA;
     Gedim::Eigen_Array<> rightHandSide;
-    Gedim::Eigen_Array<> solution;
+    Gedim::Eigen_Array<> internalSolution;
 
     if (numDofs > 0)
     {
       globalMatrixA.SetSize(numDofs, numDofs, Gedim::ISparseArray::SparseArrayTypes::Symmetric);
       rightHandSide.SetSize(numDofs);
-      solution.SetSize(numDofs);
+      internalSolution.SetSize(numDofs);
     }
+
+    DD_Utilities::Assemble(rank,
+                           problem_info,
+                           domainMesh,
+                           meshGeometricData.Cell2DsVertices,
+                           meshGeometricData.Cell2DsAreas,
+                           dofs,
+                           globalMatrixA,
+                           rightHandSide);
 
     DD_Utilities::PrintMessage(rank, cout, "Assemble System FEM SUCCESS", false);
 
@@ -244,11 +246,23 @@ namespace DOMAIN_DECOMPOSITION
       Gedim::Eigen_CholeskySolver<> choleskySolver;
       choleskySolver.Initialize(globalMatrixA,
                                 rightHandSide,
-                                solution);
+                                internalSolution);
       choleskySolver.Solve();
     }
 
     DD_Utilities::PrintMessage(rank, cout, "Solve SUCCESS", false);
+
+    DD_Utilities::PrintMessage(rank, cout, "Export Local Solution...", false);
+
+    DD_Utilities::ExportSolutionToVtu(rank,
+                                      problem_info,
+                                      dofs,
+                                      domainMesh,
+                                      internalSolution,
+                                      exportVtuFolder);
+
+    // Export the local domain mesh
+    DD_Utilities::PrintMessage(rank, cout, "Export Local Solution SUCCESS", false);
   }
   // ***************************************************************************
 }

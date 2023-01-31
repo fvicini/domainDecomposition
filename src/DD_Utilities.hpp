@@ -1,6 +1,8 @@
 #ifndef __DD_Utilities_H
 #define __DD_Utilities_H
 
+#include "ISparseArray.hpp"
+#include "IArray.hpp"
 #include "IMeshDAO.hpp"
 #include "MeshUtilities.hpp"
 
@@ -127,7 +129,16 @@ namespace DOMAIN_DECOMPOSITION
                            const Gedim::IMeshDAO& globalMesh,
                            const std::vector<Eigen::MatrixXd>& squaresVertices,
                            const std::vector<double>& squaresArea,
-                           const DOF_Info& dofs);
+                           const DOF_Info& dofs,
+                           Gedim::ISparseArray& globalMatrixA,
+                           Gedim::IArray& rightHandSide);
+
+      static void ExportSolutionToVtu(const int& rank,
+                                      const Problem_Info& problem_info,
+                                      const DOF_Info& dofs,
+                                      const Gedim::IMeshDAO& globalMesh,
+                                      const Gedim::IArray& internalSolution,
+                                      const std::string& exportFolder);
   };
 
 }

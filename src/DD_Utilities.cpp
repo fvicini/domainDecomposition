@@ -254,13 +254,10 @@ namespace DOMAIN_DECOMPOSITION
       switch (info.Cell0Ds_DOF[p].Type)
       {
         case DOF_Info::DOF::Types::Dirichlet:
-          info.Cell0Ds_DOF[p].GlobalIndex = info.Num_Internals +
-                                            info.Num_Gamma +
-                                            dirichlet_counter++;
+          info.Cell0Ds_DOF[p].GlobalIndex = dirichlet_counter++;
           break;
         case DOF_Info::DOF::Types::Gamma:
-          info.Cell0Ds_DOF[p].GlobalIndex = info.Num_Internals +
-                                            gamma_counter++;
+          info.Cell0Ds_DOF[p].GlobalIndex = gamma_counter++;
           break;
         case DOF_Info::DOF::Types::Internal:
           continue;
@@ -357,7 +354,9 @@ namespace DOMAIN_DECOMPOSITION
                               const Gedim::IMeshDAO& globalMesh,
                               const std::vector<Eigen::MatrixXd>& squaresVertices,
                               const std::vector<double>& squaresArea,
-                              const DOF_Info& dofs)
+                              const DOF_Info& dofs,
+                              Gedim::ISparseArray& globalMatrixA,
+                              Gedim::IArray& rightHandSide)
   {
     Eigen::MatrixXd referenceSquare_quadraturePoints;
     Eigen::VectorXd referenceSquare_quadratureWeights;
@@ -424,7 +423,120 @@ namespace DOMAIN_DECOMPOSITION
                                                                        square_basisFunctions_Values,
                                                                        square_quadratureWeights);
 
+        // insert local matrix into global matrix
+        for (unsigned int i_loc = 0; i_loc < 4; i_loc++)
+        {
+          const unsigned int i_mesh_point_index = square_info.Points_Index.at(i_loc);
+
+          if (dofs.Cell0Ds_DOF[i_mesh_point_index].Type ==
+              DOF_Info::DOF::Types::Dirichlet)
+            continue;
+
+          const unsigned int i_glb = dofs.Cell0Ds_DOF[i_mesh_point_index].Type ==
+                                     DOF_Info::DOF::Types::Internal ?
+                                       dofs.Cell0Ds_DOF[i_mesh_point_index].GlobalIndex :
+                                       dofs.Num_Internals +
+                                       dofs.Cell0Ds_DOF[i_mesh_point_index].GlobalIndex;
+
+          rightHandSide.AddValue(i_glb,
+                                 f[i_loc]);
+
+          for (unsigned int j_loc = 0; j_loc < 4; j_loc++)
+          {
+            const unsigned int j_mesh_point_index = square_info.Points_Index.at(j_loc);
+
+            if (dofs.Cell0Ds_DOF[j_mesh_point_index].Type ==
+                DOF_Info::DOF::Types::Dirichlet)
+              continue;
+
+            const unsigned int j_glb = dofs.Cell0Ds_DOF[j_mesh_point_index].Type ==
+                                       DOF_Info::DOF::Types::Internal ?
+                                         dofs.Cell0Ds_DOF[j_mesh_point_index].GlobalIndex :
+                                         dofs.Num_Internals +
+                                         dofs.Cell0Ds_DOF[j_mesh_point_index].GlobalIndex;
+
+            globalMatrixA.Triplet(i_glb,
+                                  j_glb,
+                                  A(i_loc, j_loc));
+          }
+        }
       }
+    }
+
+    rightHandSide.Create();
+    globalMatrixA.Create();
+  }
+  // ***************************************************************************
+  void DD_Utilities::ExportSolutionToVtu(const int& rank,
+                                         const Problem_Info& problem_info,
+                                         const DOF_Info& dofs,
+                                         const Gedim::IMeshDAO& globalMesh,
+                                         const Gedim::IArray& internalSolution,
+                                         const std::string& exportFolder)
+  {
+    {
+      Gedim::VTKUtilities exporter;
+
+      const Eigen::MatrixXd coordinates = globalMesh.Cell0DsCoordinates();
+      Eigen::VectorXd exactSolution = PDE_Equation::ExactSolution(coordinates);
+      vector<double> numericalSolution(globalMesh.Cell0DTotalNumber(), 0.0);
+
+      for (unsigned int j_domain = 0; j_domain < problem_info.Num_1D_points_domain; j_domain++)
+      {
+        for (unsigned int i_domain = 0; i_domain < problem_info.Num_1D_points_domain; i_domain++)
+        {
+          const Domain_Info domain_info = GetDomain_Info_Global(rank,
+                                                                i_domain,
+                                                                j_domain,
+                                                                problem_info.Num_1D_domains,
+                                                                problem_info.Num_1D_squares_domain);
+
+          const Point_Info point_info = Point_Info_Global(domain_info.Axes_Index.at(0),
+                                                          domain_info.Axes_Index.at(1),
+                                                          problem_info.Num_1D_points);
+
+          switch (dofs.Cell0Ds_DOF[point_info.Index].Type)
+          {
+            case DOF_Info::DOF::Types::Dirichlet:
+              continue;
+            case DOF_Info::DOF::Types::Gamma:
+              numericalSolution[point_info.Index] = internalSolution[
+                                                    dofs.Num_Internals +
+                                                    dofs.Cell0Ds_DOF[point_info.Index].GlobalIndex];
+              break;
+            case DOF_Info::DOF::Types::Internal:
+              numericalSolution[point_info.Index] = internalSolution[
+                                                    dofs.Cell0Ds_DOF[point_info.Index].GlobalIndex];
+              break;
+            default:
+              throw runtime_error("unkwnon point type");
+          }
+
+        }
+      }
+
+      exporter.AddPolygons(coordinates,
+                           globalMesh.Cell2DsVertices(),
+                           {
+                             {
+                               "Numerical",
+                               Gedim::VTPProperty::Formats::Points,
+                               static_cast<unsigned int>(numericalSolution.size()),
+                               numericalSolution.data()
+                             },
+                             {
+                               "Exact",
+                               Gedim::VTPProperty::Formats::Points,
+                               static_cast<unsigned int>(exactSolution.size()),
+                               exactSolution.data()
+                             }
+                           });
+
+      exporter.Export(exportFolder +
+                      "/Solution_" +
+                      to_string(rank) +
+                      "_Mesh_Cell2Ds" +
+                      ".vtu");
     }
   }
   // ***************************************************************************

@@ -38,4 +38,23 @@ namespace DOMAIN_DECOMPOSITION
                    points.row(0).array() * (1.0 - points.row(0).array()));
   }
   // ***************************************************************************
+  Eigen::VectorXd PDE_Equation::ExactSolution(const Eigen::MatrixXd& points)
+  {
+    return 16.0 * (points.row(1).array() * (1.0 - points.row(1).array()) *
+                   points.row(0).array() * (1.0 - points.row(0).array()));
+  }
+  // ***************************************************************************
+  Eigen::VectorXd PDE_Equation::ExactDerivativeSolution(const unsigned int& direction,
+                                                        const Eigen::MatrixXd& points)
+  {
+    if (direction == 0)
+      return 16.0 * (1.0 - 2.0 * points.row(0).array()) * points.row(1).array() * (1.0 - points.row(1).array());
+    else if (direction == 1)
+      return 16.0 * (1.0 - 2.0 * points.row(1).array()) * points.row(0).array() * (1.0 - points.row(0).array());
+    else if (direction == 2)
+      return Eigen::VectorXd::Zero(points.cols());
+    else
+      throw std::runtime_error("Error on direction");
+  }
+  // ***************************************************************************
 }
