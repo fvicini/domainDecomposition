@@ -10,6 +10,17 @@ namespace DOMAIN_DECOMPOSITION
   class DD_Utilities final
   {
     public:
+      struct Problem_Info
+      {
+          unsigned int Num_2D_points;
+          unsigned int Num_2D_squares;
+          unsigned int Num_1D_points;
+          unsigned int Num_1D_squares;
+          unsigned int Num_1D_domains;
+          unsigned int Num_1D_points_domain;
+          unsigned int Num_1D_squares_domain;
+      };
+
       struct Point_Info final
       {
           unsigned int Index;
@@ -28,28 +39,28 @@ namespace DOMAIN_DECOMPOSITION
 
       struct DOF_Info final
       {
-          enum struct Types
+          struct DOF
           {
-            Unknwon = 0,
-            Dirichlet = 1,
-            Internal = 2,
-            Gamma = 3
+              enum struct Types
+              {
+                Unknwon = 0,
+                Dirichlet = 1,
+                Internal = 2,
+                Gamma = 3
+              };
+
+              Types Type = Types::Unknwon;
+              unsigned int GlobalIndex;
           };
 
           unsigned int Num_Dirichlets;
           unsigned int Num_Internals;
           unsigned int Num_Gamma;
           unsigned int Num_Globals;
-          std::vector<Types> Cell0Ds_Type;
-          std::vector<unsigned int> Cell0Ds_GlobalIndex;
+          std::vector<DOF> Cell0Ds_DOF;
       };
 
     private:
-
-    public:
-      DD_Utilities();
-      ~DD_Utilities();
-
       /// \param i the x-axis index, from 0 to n_1D_points - 1
       /// \param j the y-axis index, from 0 to n_1D_points - 1
       /// \param n_1D_points the number of points on 1D
@@ -80,26 +91,41 @@ namespace DOMAIN_DECOMPOSITION
                                                const unsigned int& n_1D_domains,
                                                const unsigned int& n_1D_squares_domain);
 
+    public:
+      DD_Utilities();
+      ~DD_Utilities();
+
+      static void PrintMessage(const int& rank,
+                               std::ostream& output,
+                               const std::string& message,
+                               const bool& onlyMaster);
+
+      static void Assert(const int& rank,
+                         const bool& result,
+                         const std::string& message = "");
+
+      static Problem_Info ComputeProblemInfo(const int& rank,
+                                             const int& n_domains,
+                                             const Gedim::IMeshDAO& globalMesh);
+
       static void ExportDomainToVtu(const int& rank,
-                                    const unsigned int& n_1D_points,
-                                    const unsigned int& n_1D_squares,
-                                    const unsigned int& n_1D_domains,
-                                    const unsigned int& n_1D_points_domain,
-                                    const unsigned int& n_1D_squares_domain,
+                                    const Problem_Info& problem_info,
                                     const Gedim::IMeshDAO& globalMesh,
                                     const std::string& exportFolder);
 
-      static DOF_Info CreateDOFs(const int& n_domains,
-                                 const unsigned int& n_1D_points,
-                                 const unsigned int& n_1D_squares,
-                                 const unsigned int& n_1D_domains,
-                                 const unsigned int& n_1D_points_domain,
-                                 const unsigned int& n_1D_squares_domain,
+      static DOF_Info CreateDOFs(const int& rank,
+                                 const int& n_domains,
+                                 const Problem_Info& problem_info,
                                  const Gedim::IMeshDAO& globalMesh);
 
       static void ExportDOFsToVtu(const DOF_Info& dofs,
                                   const Gedim::IMeshDAO& globalMesh,
                                   const std::string& exportFolder);
+
+      static void Assemble(const int& rank,
+                           const Problem_Info& problem_info,
+                           const Gedim::IMeshDAO& globalMesh,
+                           const DOF_Info& dofs);
   };
 
 }

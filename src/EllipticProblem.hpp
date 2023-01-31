@@ -25,10 +25,6 @@ namespace DOMAIN_DECOMPOSITION
     private:
       const EllipticProblem_ProgramConfiguration& config;
 
-      static void PrintMessage(const int& rank,
-                               ostream& output,
-                               const string& message,
-                               const bool& onlyMaster);
     public:
       EllipticProblem(const EllipticProblem_ProgramConfiguration& config);
       ~EllipticProblem();

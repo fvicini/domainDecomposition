@@ -36,17 +36,6 @@ namespace DOMAIN_DECOMPOSITION
                                        "Mesh Parameter (Default: 0.25)");
   }
   // ***************************************************************************
-  void EllipticProblem::PrintMessage(const int& rank,
-                                     ostream& output,
-                                     const string& message,
-                                     const bool& onlyMaster)
-  {
-    if (onlyMaster && rank != 0)
-      return;
-
-    output<< ">> "<< "Process "<< rank<< ": "<< message<< endl;
-  }
-  // ***************************************************************************
   EllipticProblem::EllipticProblem(const EllipticProblem_ProgramConfiguration& config) :
     config(config)
   {
@@ -94,7 +83,7 @@ namespace DOMAIN_DECOMPOSITION
     Gedim::LogFile::LogFolder = logFolder;
 
     /// Create problem
-    PrintMessage(rank, cout, "Create Domain...", false);
+    DD_Utilities::PrintMessage(rank, cout, "Create Domain...", false);
 
     const Eigen::Vector3d rectangleOrigin(0.0, 0.0, 0.0);
     const Eigen::Vector3d rectangleBase(1.0, 0.0, 0.0);
@@ -104,23 +93,23 @@ namespace DOMAIN_DECOMPOSITION
                                                                          rectangleBase,
                                                                          rectangleHeight);
 
-    PrintMessage(rank, cout, "Create Domain SUCCESS", false);
+    DD_Utilities::PrintMessage(rank, cout, "Create Domain SUCCESS", false);
 
     // Export domain
-    PrintMessage(rank, cout, "Export Domain...", true);
+    DD_Utilities::PrintMessage(rank, cout, "Export Domain...", true);
     if (rank == 0)
     {
       Gedim::VTKUtilities vtkUtilities;
       vtkUtilities.AddPolygon(domain);
       vtkUtilities.Export(exportVtuFolder + "/Domain.vtu");
     }
-    PrintMessage(rank, cout, "Export Domain SUCCESS", true);
+    DD_Utilities::PrintMessage(rank, cout, "Export Domain SUCCESS", true);
 
     /// Create domain mesh
-    PrintMessage(rank, cout,
-                 "Create Domain Mesh with parameter " +
-                 to_string(config.MeshParameter()) +
-                 "...", false);
+    DD_Utilities::PrintMessage(rank, cout,
+                               "Create Domain Mesh with parameter " +
+                               to_string(config.MeshParameter()) +
+                               "...", false);
 
     Gedim::MeshMatrices domainMeshData;
     Gedim::MeshMatricesDAO domainMesh(domainMeshData);
@@ -134,104 +123,85 @@ namespace DOMAIN_DECOMPOSITION
                                       baseCoordinates,
                                       domainMesh);
 
-    const unsigned int n_1D_points = baseCoordinates.size();
-    const unsigned int n_1D_squares = n_1D_points - 1;
-    const unsigned int n_2D_points = domainMesh.Cell0DTotalNumber();
-    const unsigned int n_2D_squares = domainMesh.Cell2DTotalNumber();
+    // Compute problem info
+    DD_Utilities::Problem_Info problemInfo = DD_Utilities::ComputeProblemInfo(rank,
+                                                                              n_domains,
+                                                                              domainMesh);
 
-    PrintMessage(rank,
-                 cerr,
-                 "n_1D_points: " +
-                 to_string(n_1D_points) + " " +
-                 "n_1D_squares: " +
-                 to_string(n_1D_squares) + " " +
-                 "n_2D_points: " +
-                 to_string(n_2D_points) + " " +
-                 "n_2D_squares: " +
-                 to_string(n_2D_squares)
-                 , true);
+    DD_Utilities::PrintMessage(rank,
+                               cerr,
+                               "n_1D_points: " +
+                               to_string(problemInfo.Num_1D_points) + " " +
+                               "n_1D_squares: " +
+                               to_string(problemInfo.Num_1D_squares) + " " +
+                               "n_2D_points: " +
+                               to_string(problemInfo.Num_2D_points) + " " +
+                               "n_2D_squares: " +
+                               to_string(problemInfo.Num_2D_squares)
+                               , true);
 
-    if (n_1D_squares % 2 > 0)
-    {
-      PrintMessage(rank, cerr, "n_1D_squares shall be even", true);
-      MPI_Abort(MPI_COMM_WORLD, -1);
-    }
-
-    PrintMessage(rank, cout, "Create Domain Mesh SUCCESS", false);
+    DD_Utilities::PrintMessage(rank, cout, "Create Domain Mesh SUCCESS", false);
 
     // Export the domain mesh
-    PrintMessage(rank, cout, "Export Domain Mesh...", true);
+    DD_Utilities::PrintMessage(rank, cout, "Export Domain Mesh...", true);
     if (rank == 0)
     {
       meshUtilities.ExportMeshToVTU(domainMesh,
                                     exportVtuFolder,
                                     "Domain_Mesh");
     }
-    PrintMessage(rank, cout, "Export Domain Mesh SUCCESS", true);
+    DD_Utilities::PrintMessage(rank, cout, "Export Domain Mesh SUCCESS", true);
 
-    PrintMessage(rank, cout, "Compute domain geometric properties...", false);
+    DD_Utilities::PrintMessage(rank, cout, "Compute domain geometric properties...", false);
     Gedim::MeshUtilities::MeshGeometricData2D meshGeometricData = meshUtilities.FillMesh2DGeometricData(geometryUtilities,
                                                                                                         domainMesh);
 
-    PrintMessage(rank, cout, "Compute domain geometric properties SUCCESS", false);
+    DD_Utilities::PrintMessage(rank, cout, "Compute domain geometric properties SUCCESS", false);
 
-    /// Split mesh among processes
-    const unsigned int n_1D_domains = sqrt(n_domains);
+    DD_Utilities::PrintMessage(rank,
+                               cerr,
+                               "n_domains: " +
+                               to_string(n_domains) + " " +
+                               "n_1D_domains: " +
+                               to_string(problemInfo.Num_1D_domains)
+                               , true);
 
-    PrintMessage(rank,
-                 cerr,
-                 "n_domains: " +
-                 to_string(n_domains) + " " +
-                 "n_1D_domains: " +
-                 to_string(n_1D_domains)
-                 , true);
-
-    const unsigned int n_1D_squares_domain = n_1D_squares / n_1D_domains;
-    const unsigned int n_1D_points_domain = n_1D_squares_domain + 1;
-
-    PrintMessage(rank,
-                 cerr,
-                 "n_1D_points_domain: " +
-                 to_string(n_1D_points_domain) + " " +
-                 "n_1D_squares_domain: " +
-                 to_string(n_1D_squares_domain)
-                 , true);
+    DD_Utilities::PrintMessage(rank,
+                               cerr,
+                               "n_1D_points_domain: " +
+                               to_string(problemInfo.Num_1D_points_domain) + " " +
+                               "n_1D_squares_domain: " +
+                               to_string(problemInfo.Num_1D_squares_domain)
+                               , true);
 
     // Export the local domain mesh
-    PrintMessage(rank, cout, "Export Local Domain Mesh...", false);
+    DD_Utilities::PrintMessage(rank, cout, "Export Local Domain Mesh...", false);
 
     DD_Utilities::ExportDomainToVtu(rank,
-                                    n_1D_points,
-                                    n_1D_squares,
-                                    n_1D_domains,
-                                    n_1D_points_domain,
-                                    n_1D_squares_domain,
+                                    problemInfo,
                                     domainMesh,
                                     exportVtuDomainFolder);
-    PrintMessage(rank, cout, "Export Local Domain Mesh SUCCESS", false);
+    DD_Utilities::PrintMessage(rank, cout, "Export Local Domain Mesh SUCCESS", false);
 
-    PrintMessage(rank, cout, "Compute DOFs...", false);
+    DD_Utilities::PrintMessage(rank, cout, "Compute DOFs...", false);
     // Compute DOFs
-    DD_Utilities::DOF_Info dofs = DD_Utilities::CreateDOFs(n_domains,
-                                                           n_1D_points,
-                                                           n_1D_squares,
-                                                           n_1D_domains,
-                                                           n_1D_points_domain,
-                                                           n_1D_squares_domain,
+    DD_Utilities::DOF_Info dofs = DD_Utilities::CreateDOFs(rank,
+                                                           n_domains,
+                                                           problemInfo,
                                                            domainMesh);
-    PrintMessage(rank, cout, "Compute DOFs SUCCESS", false);
+    DD_Utilities::PrintMessage(rank, cout, "Compute DOFs SUCCESS", false);
 
-    PrintMessage(rank,
-                 cerr,
-                 "dofs.Num_Dirichlets: " +
-                 to_string(dofs.Num_Dirichlets) + " " +
-                 "dofs.Num_Internals: " +
-                 to_string(dofs.Num_Internals) + " " +
-                 "dofs.Num_Gamma: " +
-                 to_string(dofs.Num_Gamma) + " " +
-                 "dofs.Num_Globals: " +
-                 to_string(dofs.Num_Globals),
-                 true);
+    DD_Utilities::PrintMessage(rank,
+                               cerr,
+                               "dofs.Num_Dirichlets: " +
+                               to_string(dofs.Num_Dirichlets) + " " +
+                               "dofs.Num_Internals: " +
+                               to_string(dofs.Num_Internals) + " " +
+                               "dofs.Num_Gamma: " +
+                               to_string(dofs.Num_Gamma) + " " +
+                               "dofs.Num_Globals: " +
+                               to_string(dofs.Num_Globals),
+                               true);
 
     if (rank == 0)
     {
@@ -242,7 +212,7 @@ namespace DOMAIN_DECOMPOSITION
 
 
     /// Assemble System
-    PrintMessage(rank, cout, "Assemble System FEM...", false);
+    DD_Utilities::PrintMessage(rank, cout, "Assemble System FEM...", false);
 
     double numDofs = 0;
 
@@ -257,10 +227,10 @@ namespace DOMAIN_DECOMPOSITION
       solution.SetSize(numDofs);
     }
 
-    PrintMessage(rank, cout, "Assemble System FEM SUCCESS", false);
+    DD_Utilities::PrintMessage(rank, cout, "Assemble System FEM SUCCESS", false);
 
     /// Solve
-    PrintMessage(rank, cout, "Solve...", false);
+    DD_Utilities::PrintMessage(rank, cout, "Solve...", false);
 
     if (numDofs > 0)
     {
@@ -271,7 +241,7 @@ namespace DOMAIN_DECOMPOSITION
       choleskySolver.Solve();
     }
 
-    PrintMessage(rank, cout, "Solve SUCCESS", false);
+    DD_Utilities::PrintMessage(rank, cout, "Solve SUCCESS", false);
   }
   // ***************************************************************************
 }

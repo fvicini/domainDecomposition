@@ -16,6 +16,30 @@ namespace DOMAIN_DECOMPOSITION
   {
   }
   // ***************************************************************************
+  void DD_Utilities::PrintMessage(const int& rank,
+                                  std::ostream& output,
+                                  const std::string& message,
+                                  const bool& onlyMaster)
+  {
+    if (onlyMaster && rank != 0)
+      return;
+
+    output<< ">> "<< "Process "<< rank<< ": "<< message<< endl;
+  }
+  // ***************************************************************************
+  void DD_Utilities::Assert(const int& rank,
+                            const bool& result,
+                            const string& message)
+  {
+    if (!result)
+    {
+      if (!message.empty())
+        PrintMessage(rank, cerr, message, false);
+
+      MPI_Abort(MPI_COMM_WORLD, -1);
+    }
+  }
+  // ***************************************************************************
   DD_Utilities::Point_Info DD_Utilities::Point_Info_Global(const unsigned int& i,
                                                            const unsigned int& j,
                                                            const unsigned int& n_1D_points)
@@ -59,31 +83,49 @@ namespace DOMAIN_DECOMPOSITION
     return info;
   }
   // ***************************************************************************
+  DD_Utilities::Problem_Info DD_Utilities::ComputeProblemInfo(const int& rank,
+                                                              const int& n_domains,
+                                                              const Gedim::IMeshDAO& globalMesh)
+  {
+    Problem_Info info;
+    info.Num_1D_domains = sqrt(n_domains);
+
+    info.Num_2D_points = globalMesh.Cell0DTotalNumber();
+    info.Num_2D_squares = globalMesh.Cell2DTotalNumber();
+    info.Num_1D_points = sqrt(info.Num_2D_points);
+    info.Num_1D_squares = info.Num_1D_points - 1;
+
+    Assert(rank,
+           info.Num_1D_squares % 2 == 0,
+           "n_1D_squares shall be even");
+
+    info.Num_1D_squares_domain = info.Num_1D_squares / info.Num_1D_domains;
+    info.Num_1D_points_domain = info.Num_1D_squares_domain + 1;
+
+    return info;
+  }
+  // ***************************************************************************
   void DD_Utilities::ExportDomainToVtu(const int& rank,
-                                       const unsigned int& n_1D_points,
-                                       const unsigned int& n_1D_squares,
-                                       const unsigned int& n_1D_domains,
-                                       const unsigned int& n_1D_points_domain,
-                                       const unsigned int& n_1D_squares_domain,
+                                       const Problem_Info& problem_info,
                                        const Gedim::IMeshDAO& globalMesh,
                                        const std::string& exportFolder)
   {
     {
       Gedim::VTKUtilities exporter;
 
-      for (unsigned int i_domain = 0; i_domain < n_1D_points_domain; i_domain++)
+      for (unsigned int i_domain = 0; i_domain < problem_info.Num_1D_points_domain; i_domain++)
       {
-        for (unsigned int j_domain = 0; j_domain < n_1D_points_domain; j_domain++)
+        for (unsigned int j_domain = 0; j_domain < problem_info.Num_1D_points_domain; j_domain++)
         {
           const Domain_Info domain_info = GetDomain_Info_Global(rank,
                                                                 i_domain,
                                                                 j_domain,
-                                                                n_1D_domains,
-                                                                n_1D_squares_domain);
+                                                                problem_info.Num_1D_domains,
+                                                                problem_info.Num_1D_squares_domain);
 
           const Point_Info point_info = Point_Info_Global(domain_info.Axes_Index.at(0),
                                                           domain_info.Axes_Index.at(1),
-                                                          n_1D_points);
+                                                          problem_info.Num_1D_points);
 
           const vector<double> cell0DDomain(1, rank);
           const vector<double> cell0DGlobalIndex(1, point_info.Index);
@@ -115,20 +157,20 @@ namespace DOMAIN_DECOMPOSITION
     {
       Gedim::VTKUtilities exporter;
 
-      for (unsigned int i_domain = 0; i_domain < n_1D_squares_domain; i_domain++)
+      for (unsigned int i_domain = 0; i_domain < problem_info.Num_1D_squares_domain; i_domain++)
       {
-        for (unsigned int j_domain = 0; j_domain < n_1D_squares_domain; j_domain++)
+        for (unsigned int j_domain = 0; j_domain < problem_info.Num_1D_squares_domain; j_domain++)
         {
           const Domain_Info domain_info = GetDomain_Info_Global(rank,
                                                                 i_domain,
                                                                 j_domain,
-                                                                n_1D_domains,
-                                                                n_1D_squares_domain);
+                                                                problem_info.Num_1D_domains,
+                                                                problem_info.Num_1D_squares_domain);
 
           const Square_Info square_info = Square_Info_Global(domain_info.Axes_Index.at(0),
                                                              domain_info.Axes_Index.at(1),
-                                                             n_1D_points,
-                                                             n_1D_squares);
+                                                             problem_info.Num_1D_points,
+                                                             problem_info.Num_1D_squares);
 
           const vector<double> cell2DDomain(1, rank);
           const vector<double> cell2DGlobalIndex(1, square_info.Index);
@@ -158,12 +200,9 @@ namespace DOMAIN_DECOMPOSITION
     }
   }
   // ***************************************************************************
-  DD_Utilities::DOF_Info DD_Utilities::CreateDOFs(const int& n_domains,
-                                                  const unsigned int& n_1D_points,
-                                                  const unsigned int& n_1D_squares,
-                                                  const unsigned int& n_1D_domains,
-                                                  const unsigned int& n_1D_points_domain,
-                                                  const unsigned int& n_1D_squares_domain,
+  DD_Utilities::DOF_Info DD_Utilities::CreateDOFs(const int& rank,
+                                                  const int& n_domains,
+                                                  const Problem_Info& problem_info,
                                                   const Gedim::IMeshDAO& globalMesh)
   {
     DOF_Info info;
@@ -173,31 +212,30 @@ namespace DOMAIN_DECOMPOSITION
     info.Num_Internals = 0;
     info.Num_Gamma = 0;
     info.Num_Globals = globalMesh.Cell0DTotalNumber();
-    info.Cell0Ds_Type.resize(globalMesh.Cell0DTotalNumber(), DOF_Info::Types::Unknwon);
-    info.Cell0Ds_GlobalIndex.resize(globalMesh.Cell0DTotalNumber(), 0);
+    info.Cell0Ds_DOF.resize(globalMesh.Cell0DTotalNumber());
 
     // check mesh points type
-    for (unsigned int i = 0; i < n_1D_points; i++)
+    for (unsigned int i = 0; i < problem_info.Num_1D_points; i++)
     {
-      for (unsigned int j = 0; j < n_1D_points; j++)
+      for (unsigned int j = 0; j < problem_info.Num_1D_points; j++)
       {
-        const Point_Info global_info = Point_Info_Global(i, j, n_1D_points);
+        const Point_Info global_info = Point_Info_Global(i, j, problem_info.Num_1D_points);
 
-        if (i == 0 || i == n_1D_points - 1 ||
-            j == 0 || j == n_1D_points - 1)
+        if (i == 0 || i == problem_info.Num_1D_points - 1 ||
+            j == 0 || j == problem_info.Num_1D_points - 1)
         {
-          info.Cell0Ds_Type[global_info.Index] = DOF_Info::Types::Dirichlet;
+          info.Cell0Ds_DOF[global_info.Index].Type = DOF_Info::DOF::Types::Dirichlet;
           info.Num_Dirichlets++;
         }
-        else if (i % n_1D_squares_domain == 0 ||
-                 j % n_1D_squares_domain == 0)
+        else if (i % problem_info.Num_1D_squares_domain == 0 ||
+                 j % problem_info.Num_1D_squares_domain == 0)
         {
-          info.Cell0Ds_Type[global_info.Index] = DOF_Info::Types::Gamma;
+          info.Cell0Ds_DOF[global_info.Index].Type = DOF_Info::DOF::Types::Gamma;
           info.Num_Gamma++;
         }
         else
         {
-          info.Cell0Ds_Type[global_info.Index] = DOF_Info::Types::Internal;
+          info.Cell0Ds_DOF[global_info.Index].Type = DOF_Info::DOF::Types::Internal;
           info.Num_Internals++;
         }
       }
@@ -208,52 +246,54 @@ namespace DOMAIN_DECOMPOSITION
     unsigned int gamma_counter = 0;
     for (unsigned int p = 0; p < globalMesh.Cell0DTotalNumber(); p++)
     {
-      switch (info.Cell0Ds_Type[p])
+      switch (info.Cell0Ds_DOF[p].Type)
       {
-        case DOF_Info::Types::Dirichlet:
-          info.Cell0Ds_GlobalIndex[p] = info.Num_Internals +
-                                        info.Num_Gamma +
-                                        dirichlet_counter++;
+        case DOF_Info::DOF::Types::Dirichlet:
+          info.Cell0Ds_DOF[p].GlobalIndex = info.Num_Internals +
+                                            info.Num_Gamma +
+                                            dirichlet_counter++;
           break;
-        case DOF_Info::Types::Gamma:
-          info.Cell0Ds_GlobalIndex[p] = info.Num_Internals +
-                                        gamma_counter++;
+        case DOF_Info::DOF::Types::Gamma:
+          info.Cell0Ds_DOF[p].GlobalIndex = info.Num_Internals +
+                                            gamma_counter++;
           break;
-        case DOF_Info::Types::Internal:
+        case DOF_Info::DOF::Types::Internal:
           continue;
         default:
           throw runtime_error("unkwnon point type");
       }
     }
 
-    Gedim::Output::Assert(dirichlet_counter == info.Num_Dirichlets);
-    Gedim::Output::Assert(gamma_counter == info.Num_Gamma);
+    Assert(rank,
+           dirichlet_counter == info.Num_Dirichlets);
+    Assert(rank,
+           gamma_counter == info.Num_Gamma);
 
     // numerate internal dofs with processes order
     unsigned int internal_counter = 0;
     for (unsigned int rank = 0; rank < n_domains; rank++)
     {
-      for (unsigned int j_domain = 0; j_domain < n_1D_points_domain; j_domain++)
+      for (unsigned int j_domain = 0; j_domain < problem_info.Num_1D_points_domain; j_domain++)
       {
-        for (unsigned int i_domain = 0; i_domain < n_1D_points_domain; i_domain++)
+        for (unsigned int i_domain = 0; i_domain < problem_info.Num_1D_points_domain; i_domain++)
         {
           const Domain_Info domain_info = GetDomain_Info_Global(rank,
                                                                 i_domain,
                                                                 j_domain,
-                                                                n_1D_domains,
-                                                                n_1D_squares_domain);
+                                                                problem_info.Num_1D_domains,
+                                                                problem_info.Num_1D_squares_domain);
 
           const Point_Info point_info = Point_Info_Global(domain_info.Axes_Index.at(0),
                                                           domain_info.Axes_Index.at(1),
-                                                          n_1D_points);
+                                                          problem_info.Num_1D_points);
 
-          switch (info.Cell0Ds_Type[point_info.Index])
+          switch (info.Cell0Ds_DOF[point_info.Index].Type)
           {
-            case DOF_Info::Types::Dirichlet:
-            case DOF_Info::Types::Gamma:
+            case DOF_Info::DOF::Types::Dirichlet:
+            case DOF_Info::DOF::Types::Gamma:
               continue;
-            case DOF_Info::Types::Internal:
-              info.Cell0Ds_GlobalIndex[point_info.Index] = internal_counter++;
+            case DOF_Info::DOF::Types::Internal:
+              info.Cell0Ds_DOF[point_info.Index].GlobalIndex = internal_counter++;
               break;
             default:
               throw runtime_error("unkwnon point type");
@@ -262,7 +302,8 @@ namespace DOMAIN_DECOMPOSITION
       }
     }
 
-    Gedim::Output::Assert(internal_counter == info.Num_Internals);
+    Assert(rank,
+           internal_counter == info.Num_Internals);
 
     return info;
   }
@@ -279,8 +320,8 @@ namespace DOMAIN_DECOMPOSITION
 
       for (unsigned int p = 0; p < globalMesh.Cell0DTotalNumber(); p++)
       {
-        dofsType[p] = (double)dofs.Cell0Ds_Type[p];
-        dofsIndex[p] = dofs.Cell0Ds_GlobalIndex[p];
+        dofsType[p] = (double)dofs.Cell0Ds_DOF[p].Type;
+        dofsIndex[p] = dofs.Cell0Ds_DOF[p].GlobalIndex;
       }
 
       exporter.AddPoints(globalMesh.Cell0DsCoordinates(),
@@ -303,6 +344,30 @@ namespace DOMAIN_DECOMPOSITION
                       "/DOFs_" +
                       "Mesh_Cell0Ds" +
                       ".vtu");
+    }
+  }
+  // ***************************************************************************
+  void DD_Utilities::Assemble(const int& rank,
+                              const Problem_Info& problem_info,
+                              const Gedim::IMeshDAO& globalMesh,
+                              const DOF_Info& dofs)
+  {
+    for (unsigned int j_domain = 0; j_domain < problem_info.Num_1D_points_domain; j_domain++)
+    {
+      for (unsigned int i_domain = 0; i_domain < problem_info.Num_1D_points_domain; i_domain++)
+      {
+        const Domain_Info domain_info = GetDomain_Info_Global(rank,
+                                                              i_domain,
+                                                              j_domain,
+                                                              problem_info.Num_1D_domains,
+                                                              problem_info.Num_1D_squares_domain);
+
+        const Point_Info point_info = Point_Info_Global(domain_info.Axes_Index.at(0),
+                                                        domain_info.Axes_Index.at(1),
+                                                        problem_info.Num_1D_points);
+
+
+      }
     }
   }
   // ***************************************************************************
