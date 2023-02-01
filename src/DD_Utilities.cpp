@@ -99,24 +99,23 @@ namespace DOMAIN_DECOMPOSITION
                                       const Gedim::IArray& p,
                                       Gedim::IArray& Sp)
   {
-    Gedim::Eigen_Array<> w_I, A_IG_p, A_GI_w;
+    Gedim::Eigen_Array<> w_I, rhs_I;
 
     w_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
-    A_IG_p.SetSize(dofs.Domains_DOF[rank].Num_Internals);
-    A_GI_w.SetSize(dofs.Num_Gamma);
+    rhs_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
     Sp.SetSize(dofs.Num_Gamma);
 
-    // compute -A_IG * p
-    A_IG_p.SubtractionMultiplication(A_IG, p);
-    // solve A_II w_I = -A_IG * p)
-    A_II_solver.Solve(A_IG_p, w_I);
+    // compute rhs_I = sum_domain - A_IG * p
+    rhs_I.SubtractionMultiplication(A_IG, p);
+    MPI_Allreduce(MPI_IN_PLACE, rhs_I.Data(), rhs_I.Size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-    // compute A_GI_w = A_GI * w_I + A_GG * p
-    A_GI_w.SumMultiplication(A_GI, w_I);
-    A_GI_w.SumMultiplication(A_GG, p);
+    // solve A_II w_I = sum_domain - A_IG * p
+    A_II_solver.Solve(rhs_I, w_I);
 
-    // compute on master sum_domain A_GI * w_I
-    MPI_Allreduce(A_GI_w.Data(), Sp.Data(), Sp.Size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    // compute Sp = sum_domain A_GI * w_I + A_GG * p
+    Sp.SumMultiplication(A_GI, w_I);
+    Sp.SumMultiplication(A_GG, p);
+    MPI_Allreduce(MPI_IN_PLACE, Sp.Data(), Sp.Size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
   }
   // ***************************************************************************
   void DD_Utilities::ShurCG(const int& rank,
@@ -130,29 +129,34 @@ namespace DOMAIN_DECOMPOSITION
                             const double& tolerance,
                             Gedim::IArray& u_G)
   {
-    Gedim::Eigen_Array<> r_k, r_k_1, p_k, Sp_k;
-    r_k_1.Copy(g);
-    r_k.Copy(r_k_1);
-    p_k.Copy(r_k_1);
+    Gedim::Eigen_Array<> r_k, p_k, Sp_k;
+    r_k.Copy(g);
+    p_k.Copy(r_k);
 
     double beta_k = 0.0, alpha_k = 0.0;
     unsigned int iteration = 0;
-    double r_0_norm = r_k_1.Norm();
-    double r_k_norm = r_0_norm;
 
-    while (r_k_norm > tolerance * r_0_norm &&
+    double r_0_dot = r_k.Dot(r_k);
+    double r_k_1_dot = r_0_dot;
+    double r_k_dot = r_0_dot;
+
+    while (r_k_dot > tolerance * tolerance * r_0_dot &&
            iteration < max_iterations)
     {
       if (rank == 0)
       {
         cout<< scientific<< "CG"<< " ";
         cout<< "it "<< iteration<< "/"<< max_iterations<< " ";
-        cout<< "res "<< r_k_norm<< "/"<< tolerance * r_0_norm<< endl;
+        cout<< "res "<< sqrt(r_k_dot)<< "/"<< tolerance * sqrt(r_k_dot)<< endl;
       }
 
-      beta_k = (iteration == 0) ? 0.0 : r_k.Dot(r_k) / r_k_1.Dot(r_k_1);
-      p_k = (iteration == 0) ? r_k_1 : (r_k + p_k * beta_k);
+      beta_k = (iteration == 0) ? 0.0 : r_k_dot / r_k_1_dot;
 
+      // compute p_k = r_k + beta_k * p_k_1
+      p_k *= beta_k;
+      p_k += r_k;
+
+      // compute S * p_k
       ApplyShurToArray(rank,
                        dofs,
                        A_II_solver,
@@ -162,12 +166,16 @@ namespace DOMAIN_DECOMPOSITION
                        p_k,
                        Sp_k);
 
-      alpha_k = r_k.Dot(r_k) / p_k.Dot(Sp_k);
+      alpha_k = r_k_dot / p_k.Dot(Sp_k);
 
-      u_G += p_k * alpha_k;
+      // compute u_G_k = u_G_k_1 + alpha_k * p_k
+      u_G += (p_k * alpha_k);
 
-      r_k_1.Copy(r_k);
-      r_k = r_k_1 - Sp_k * alpha_k;
+      // compute r_k = r_k_1 - alpha_k * S * p_k
+      r_k_1_dot = r_k_dot;
+
+      r_k -= (Sp_k * alpha_k);
+      r_k_dot = r_k.Dot(r_k);
 
       iteration++;
     }
@@ -681,22 +689,19 @@ namespace DOMAIN_DECOMPOSITION
     }
 
     // initialize auxiliary variables
-    Gedim::Eigen_Array<> h_I, g_A_GI_h, g, A_IG_u_g;
+    Gedim::Eigen_Array<> h_I, g, rhs_I;
 
     h_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
-    g_A_GI_h.SetSize(dofs.Num_Gamma);
     g.SetSize(dofs.Num_Gamma);
-    A_IG_u_g.SetSize(dofs.Domains_DOF[rank].Num_Internals);
+    rhs_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
 
     // solve internal system A_II * h_I = f_I
     A_II_solver.Solve(f_I, h_I);
 
-    // compute g_A_GI_h = f_G - A_GI * h_I
-    g_A_GI_h.SubtractionMultiplication(A_GI, h_I);
-    g_A_GI_h += f_G;
-
-    // compute on master sum_domain f_G - A_GI * h_I
-    MPI_Allreduce(g_A_GI_h.Data(), g.Data(), g.Size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    // compute g = sum_domain f_G - A_GI * h_I
+    g += f_G;
+    g.SubtractionMultiplication(A_GI, h_I);
+    MPI_Allreduce(MPI_IN_PLACE, g.Data(), g.Size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
     PrintArray(rank, "g", g);
 
@@ -708,15 +713,17 @@ namespace DOMAIN_DECOMPOSITION
            A_GI,
            A_GG,
            g,
-           2,
+           1000,
            1.0e-6,
            u_G);
 
-    // solve A_II * u_i = f_I - A_IG * u_g
-    A_IG_u_g += f_I;
-    A_IG_u_g.SubtractionMultiplication(A_IG, u_G);
+    // solve A_II * u_i = f_I - sum_domain A_IG * u_g
+    rhs_I.SubtractionMultiplication(A_IG, u_G);
+    MPI_Allreduce(MPI_IN_PLACE, rhs_I.Data(), rhs_I.Size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-    A_II_solver.Solve(A_IG_u_g, u_I);
+    rhs_I += f_I;
+
+    A_II_solver.Solve(rhs_I, u_I);
   }
   // ***************************************************************************
   void DD_Utilities::ComputeErrors(const int& rank,
