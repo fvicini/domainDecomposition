@@ -147,13 +147,11 @@ namespace DOMAIN_DECOMPOSITION
       {
         cout<< scientific<< "CG"<< " ";
         cout<< "it "<< iteration<< "/"<< max_iterations<< " ";
-        cout<< "res "<< r_k_norm<< "/"<< tolerance<< endl;
+        cout<< "res "<< r_k_norm<< "/"<< tolerance * r_0_norm<< endl;
       }
 
       beta_k = (iteration == 0) ? 0.0 : r_k.Dot(r_k) / r_k_1.Dot(r_k_1);
       p_k = (iteration == 0) ? r_k_1 : (r_k + p_k * beta_k);
-
-      PrintArray(rank, "p_k", p_k);
 
       ApplyShurToArray(rank,
                        dofs,
@@ -164,16 +162,12 @@ namespace DOMAIN_DECOMPOSITION
                        p_k,
                        Sp_k);
 
-      PrintArray(rank, "Sp_k", Sp_k);
-
       alpha_k = r_k.Dot(r_k) / p_k.Dot(Sp_k);
 
       u_G += p_k * alpha_k;
 
       r_k_1.Copy(r_k);
       r_k = r_k_1 - Sp_k * alpha_k;
-
-      PrintArray(rank, "r_k", r_k);
 
       iteration++;
     }
@@ -681,18 +675,20 @@ namespace DOMAIN_DECOMPOSITION
 
     if (dofs.Num_Gamma == 0)
     {
+      // solve A_II * u_I = f_I
       A_II_solver.Solve(f_I, u_I);
       return;
     }
 
     // initialize auxiliary variables
-    Gedim::Eigen_Array<> h_I, g_A_GI_h, g;
+    Gedim::Eigen_Array<> h_I, g_A_GI_h, g, A_IG_u_g;
 
     h_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
     g_A_GI_h.SetSize(dofs.Num_Gamma);
     g.SetSize(dofs.Num_Gamma);
+    A_IG_u_g.SetSize(dofs.Domains_DOF[rank].Num_Internals);
 
-    // solve internal system A_II h_I = f_I
+    // solve internal system A_II * h_I = f_I
     A_II_solver.Solve(f_I, h_I);
 
     // compute g_A_GI_h = f_G - A_GI * h_I
@@ -712,9 +708,15 @@ namespace DOMAIN_DECOMPOSITION
            A_GI,
            A_GG,
            g,
-           1000,
+           2,
            1.0e-6,
            u_G);
+
+    // solve A_II * u_i = f_I - A_IG * u_g
+    A_IG_u_g += f_I;
+    A_IG_u_g.SubtractionMultiplication(A_IG, u_G);
+
+    A_II_solver.Solve(A_IG_u_g, u_I);
   }
   // ***************************************************************************
   void DD_Utilities::ComputeErrors(const int& rank,
