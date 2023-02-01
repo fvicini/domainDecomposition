@@ -222,11 +222,13 @@ namespace DOMAIN_DECOMPOSITION
                                       const std::string& exportFolder);
 
       static void ExportErrorToStream(const int& rank,
+                                      const int& n_domains,
                                       const unsigned int& femOrder,
                                       const unsigned int& numCell2Ds,
                                       const unsigned int& numInternals,
                                       const unsigned int& numGamma,
                                       const double& h,
+                                      const double& H,
                                       const double& errorL2,
                                       const double& errorH1,
                                       const bool& printHeader,

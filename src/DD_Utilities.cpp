@@ -991,11 +991,13 @@ namespace DOMAIN_DECOMPOSITION
   }
   // ***************************************************************************
   void DD_Utilities::ExportErrorToStream(const int& rank,
+                                         const int& n_domains,
                                          const unsigned int& femOrder,
                                          const unsigned int& numCell2Ds,
                                          const unsigned int& numInternals,
                                          const unsigned int& numGamma,
                                          const double& h,
+                                         const double& H,
                                          const double& errorL2,
                                          const double& errorH1,
                                          const bool& printHeader,
@@ -1007,21 +1009,25 @@ namespace DOMAIN_DECOMPOSITION
 
     if (printHeader)
     {
+      out<< "Numdomains" << separator;
       out<< "FemOrder" << separator;
       out<< "Cell2Ds" <<  separator;
       out<< "NumInternals" <<  separator;
       out<< "NumGamma" <<  separator;
       out<< "h" <<  separator;
+      out<< "H" <<  separator;
       out<< "L2" <<  separator;
       out<< "H1" << endl;
     }
 
     out.precision(16);
+    out<< scientific<< n_domains<< separator;
     out<< scientific<< femOrder<< separator;
     out<< scientific<< numCell2Ds<< separator;
     out<< scientific<< numInternals<< separator;
     out<< scientific<< numGamma<< separator;
     out<< scientific<< h << separator;
+    out<< scientific<< H << separator;
     out<< scientific<< errorL2<< separator;
     out<< scientific<< errorH1<< endl;
   }

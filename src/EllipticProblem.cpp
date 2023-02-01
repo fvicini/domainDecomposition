@@ -167,6 +167,7 @@ namespace DOMAIN_DECOMPOSITION
     Gedim::MeshUtilities::MeshGeometricData2D meshGeometricData = meshUtilities.FillMesh2DGeometricData(geometryUtilities,
                                                                                                         domainMesh);
 
+    const double H = 1.0 / problem_info.Num_1D_domains;
     const double h = *max_element(std::begin(meshGeometricData.Cell2DsDiameters),
                                   std::end(meshGeometricData.Cell2DsDiameters));
 
@@ -293,11 +294,13 @@ namespace DOMAIN_DECOMPOSITION
     const double errorH1 = sqrt(errorH1_mesh.sum());
 
     DD_Utilities::ExportErrorToStream(rank,
+                                      n_domains,
                                       1,
                                       domainMesh.Cell2DTotalNumber(),
                                       dofs.Num_Internals,
                                       dofs.Num_Gamma,
                                       h,
+                                      H,
                                       errorL2,
                                       errorH1,
                                       true,
@@ -313,14 +316,16 @@ namespace DOMAIN_DECOMPOSITION
       std::ofstream errorFile(errorFileName,
                               std::ios_base::app | std::ios_base::out);
       DD_Utilities::ExportErrorToStream(rank,
+                                        n_domains,
                                         1,
                                         domainMesh.Cell2DTotalNumber(),
                                         dofs.Num_Internals,
                                         dofs.Num_Gamma,
                                         h,
+                                        H,
                                         errorL2,
                                         errorH1,
-                                        errorFileExists,
+                                        !errorFileExists,
                                         errorFile,
                                         ',');
       errorFile.close();
