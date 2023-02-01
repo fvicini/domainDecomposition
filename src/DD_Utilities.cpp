@@ -155,6 +155,12 @@ namespace DOMAIN_DECOMPOSITION
       beta_k = (iteration == 0) ? 0.0 : r_k.Dot(r_k) / r_k_1.Dot(r_k_1);
       p_k = (iteration == 0) ? r_k_1 : (r_k + p_k * beta_k);
 
+      {
+        using namespace Gedim;
+        cout<< "Process "<< rank<< " p_k: "<< p_k<< endl;
+        MPI_Barrier(MPI_COMM_WORLD);
+      }
+
       ApplyShurToArray(rank,
                        dofs,
                        A_II_solver,
@@ -164,12 +170,26 @@ namespace DOMAIN_DECOMPOSITION
                        p_k,
                        Sp_k);
 
+      {
+        using namespace Gedim;
+        cout<< "Process "<< rank<< " Sp_k: "<< Sp_k<< endl;
+        MPI_Barrier(MPI_COMM_WORLD);
+      }
+
       alpha_k = r_k.Dot(r_k) / p_k.Dot(Sp_k);
 
       u_G += p_k * alpha_k;
 
       r_k_1.Copy(r_k);
       r_k = r_k_1 - Sp_k * alpha_k;
+
+      {
+        using namespace Gedim;
+        cout<< "Process "<< rank<< " r_k: "<< r_k<< endl;
+        MPI_Barrier(MPI_COMM_WORLD);
+      }
+
+      exit(-1);
 
       iteration++;
     }
@@ -680,20 +700,18 @@ namespace DOMAIN_DECOMPOSITION
     // solve internal system A_II h_I = f_I
     A_II_solver.Solve(f_I, h_I);
 
-    {
-      using namespace Gedim;
-      cout<< "Process "<< rank<< " h_I: "<< h_I<< endl;
-      MPI_Barrier(MPI_COMM_WORLD);
-    }
-
-    // compute g_A_GI_h = -A_GI * h_I
+    // compute g_A_GI_h = f_G - A_GI * h_I
     g_A_GI_h.SubtractionMultiplication(A_GI, h_I);
+    g_A_GI_h += f_G;
 
-    // compute on master -sum_domain A_GI * h_I
+    // compute on master sum_domain f_G - A_GI * h_I
     MPI_Allreduce(g_A_GI_h.Data(), g.Data(), g.Size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-    // compute g = f_G - sum_domain A_GI * h_I
-    g += f_G;
+    {
+      using namespace Gedim;
+      cout<< "Process "<< rank<< " g: "<< g<< endl;
+      MPI_Barrier(MPI_COMM_WORLD);
+    }
 
     // solve S u_G = g with CG
     ShurCG(rank,
