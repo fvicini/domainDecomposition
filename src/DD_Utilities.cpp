@@ -218,6 +218,7 @@ namespace DOMAIN_DECOMPOSITION
     info.Num_Internals = 0;
     info.Num_Gamma = 0;
     info.Num_Globals = globalMesh.Cell0DTotalNumber();
+    info.Domains_DOF.resize(n_domains);
     info.Cell0Ds_DOF.resize(globalMesh.Cell0DTotalNumber());
 
     // check mesh points type
@@ -276,6 +277,9 @@ namespace DOMAIN_DECOMPOSITION
     unsigned int internal_counter = 0;
     for (unsigned int rank = 0; rank < n_domains; rank++)
     {
+      info.Domains_DOF[rank].Num_Internals = 0;
+      info.Domains_DOF[rank].Starting_Index = internal_counter;
+
       for (unsigned int j_domain = 0; j_domain < problem_info.Num_1D_points_domain; j_domain++)
       {
         for (unsigned int i_domain = 0; i_domain < problem_info.Num_1D_points_domain; i_domain++)
@@ -296,6 +300,7 @@ namespace DOMAIN_DECOMPOSITION
             case DOF_Info::DOF::Types::Gamma:
               continue;
             case DOF_Info::DOF::Types::Internal:
+              info.Domains_DOF[rank].Num_Internals++;
               info.Cell0Ds_DOF[point_info.Index].GlobalIndex = internal_counter++;
               break;
             default:

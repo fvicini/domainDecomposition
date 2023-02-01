@@ -15,29 +15,29 @@ namespace DOMAIN_DECOMPOSITION
     public:
       struct Problem_Info
       {
-          unsigned int Num_2D_points;
-          unsigned int Num_2D_squares;
-          unsigned int Num_1D_points;
-          unsigned int Num_1D_squares;
-          unsigned int Num_1D_domains;
-          unsigned int Num_1D_points_domain;
-          unsigned int Num_1D_squares_domain;
+          unsigned int Num_2D_points = 0;
+          unsigned int Num_2D_squares = 0;
+          unsigned int Num_1D_points = 0;
+          unsigned int Num_1D_squares = 0;
+          unsigned int Num_1D_domains = 0;
+          unsigned int Num_1D_points_domain = 0;
+          unsigned int Num_1D_squares_domain = 0;
       };
 
       struct Point_Info final
       {
-          unsigned int Index;
+          unsigned int Index = 0;
       };
 
       struct Square_Info final
       {
-          unsigned int Index;
-          std::vector<unsigned int> Points_Index;
+          unsigned int Index = 0;
+          std::vector<unsigned int> Points_Index = {};
       };
 
       struct Domain_Info final
       {
-          std::vector<unsigned int> Axes_Index;
+          std::vector<unsigned int> Axes_Index = {};
       };
 
       struct DOF_Info final
@@ -53,14 +53,21 @@ namespace DOMAIN_DECOMPOSITION
               };
 
               Types Type = Types::Unknwon;
-              unsigned int GlobalIndex;
+              unsigned int GlobalIndex = 0;
           };
 
-          unsigned int Num_Dirichlets;
-          unsigned int Num_Internals;
-          unsigned int Num_Gamma;
-          unsigned int Num_Globals;
-          std::vector<DOF> Cell0Ds_DOF;
+          struct Domain_DOF
+          {
+            unsigned int Num_Internals = 0;
+            unsigned int Starting_Index = 0;
+          };
+
+          unsigned int Num_Dirichlets = 0;
+          unsigned int Num_Internals = 0;
+          unsigned int Num_Gamma = 0;
+          unsigned int Num_Globals = 0;
+          std::vector<Domain_DOF> Domains_DOF = {};
+          std::vector<DOF> Cell0Ds_DOF = {};
       };
 
     private:

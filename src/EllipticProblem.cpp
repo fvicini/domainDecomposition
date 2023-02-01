@@ -203,8 +203,12 @@ namespace DOMAIN_DECOMPOSITION
                                "dofs.Num_Gamma: " +
                                to_string(dofs.Num_Gamma) + " " +
                                "dofs.Num_Globals: " +
-                               to_string(dofs.Num_Globals),
-                               true);
+                               to_string(dofs.Num_Globals) + " " +
+                               "dofs.Local_Num_Internals: " +
+                               to_string(dofs.Domains_DOF[rank].Num_Internals) + " " +
+                               "dofs.Local_Internals_Index: " +
+                               to_string(dofs.Domains_DOF[rank].Starting_Index),
+                               false);
 
     if (rank == 0)
     {
@@ -212,7 +216,6 @@ namespace DOMAIN_DECOMPOSITION
                                     domainMesh,
                                     exportVtuFolder);
     }
-
 
     /// Assemble System
     DD_Utilities::PrintMessage(rank, cout, "Assemble System FEM...", false);
