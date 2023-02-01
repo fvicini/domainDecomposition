@@ -164,7 +164,8 @@ namespace DOMAIN_DECOMPOSITION
                                 const std::vector<Eigen::MatrixXd>& squaresVertices,
                                 const std::vector<double>& squaresArea,
                                 const DOF_Info& dofs,
-                                const Gedim::IArray& internalSolution,
+                                const Gedim::IArray& u_I,
+                                const Gedim::IArray& u_G,
                                 Eigen::VectorXd& errorL2,
                                 Eigen::VectorXd& errorH1);
 
@@ -172,7 +173,8 @@ namespace DOMAIN_DECOMPOSITION
                                       const Problem_Info& problem_info,
                                       const DOF_Info& dofs,
                                       const Gedim::IMeshDAO& globalMesh,
-                                      const Gedim::IArray& internalSolution,
+                                      const Gedim::IArray& u_I,
+                                      const Gedim::IArray& u_G,
                                       const std::string& exportFolder);
 
       static void ExportErrorToStream(const int& rank,

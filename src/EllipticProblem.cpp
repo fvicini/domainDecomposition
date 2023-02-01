@@ -288,6 +288,7 @@ namespace DOMAIN_DECOMPOSITION
                                 meshGeometricData.Cell2DsAreas,
                                 dofs,
                                 u_I,
+                                u_G,
                                 errorL2_mesh,
                                 errorH1_mesh);
 
@@ -338,6 +339,7 @@ namespace DOMAIN_DECOMPOSITION
                                       dofs,
                                       domainMesh,
                                       u_I,
+                                      u_G,
                                       exportVtuFolder);
 
     // Export the local domain mesh

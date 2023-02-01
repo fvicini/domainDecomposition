@@ -571,7 +571,8 @@ namespace DOMAIN_DECOMPOSITION
                                    const std::vector<Eigen::MatrixXd>& squaresVertices,
                                    const std::vector<double>& squaresArea,
                                    const DOF_Info& dofs,
-                                   const Gedim::IArray& internalSolution,
+                                   const Gedim::IArray& u_I,
+                                   const Gedim::IArray& u_G,
                                    Eigen::VectorXd& errorL2,
                                    Eigen::VectorXd& errorH1)
   {
@@ -650,13 +651,20 @@ namespace DOMAIN_DECOMPOSITION
               DOF_Info::DOF::Types::Dirichlet)
             continue;
 
-          const unsigned int i_glb = dofs.Cell0Ds_DOF[i_mesh_point_index].Type ==
-                                     DOF_Info::DOF::Types::Internal ?
-                                       dofs.Cell0Ds_DOF[i_mesh_point_index].Global_Index :
-                                       dofs.Num_Internals +
-                                       dofs.Cell0Ds_DOF[i_mesh_point_index].Global_Index;
-
-          localNumericSolution[i_loc] = internalSolution[i_glb];
+          if (dofs.Cell0Ds_DOF[i_mesh_point_index].Type ==
+              DOF_Info::DOF::Types::Internal)
+          {
+            const unsigned int i_dom_loc = dofs.Cell0Ds_DOF[i_mesh_point_index].Local_Index;
+            localNumericSolution[i_loc] = u_I[i_dom_loc];
+          }
+          else if (dofs.Cell0Ds_DOF[i_mesh_point_index].Type ==
+                   DOF_Info::DOF::Types::Gamma)
+          {
+            const unsigned int i_glb = dofs.Cell0Ds_DOF[i_mesh_point_index].Global_Index;
+            localNumericSolution[i_loc] = u_G[i_glb];
+          }
+          else
+            throw runtime_error("Unknown J DOF type");
         }
 
         Eigen::VectorXd localErrorL2 = (square_basisFunctions_Values * localNumericSolution -
@@ -678,7 +686,8 @@ namespace DOMAIN_DECOMPOSITION
                                          const Problem_Info& problem_info,
                                          const DOF_Info& dofs,
                                          const Gedim::IMeshDAO& globalMesh,
-                                         const Gedim::IArray& internalSolution,
+                                         const Gedim::IArray& u_I,
+                                         const Gedim::IArray& u_G,
                                          const std::string& exportFolder)
   {
     {
@@ -707,18 +716,16 @@ namespace DOMAIN_DECOMPOSITION
             case DOF_Info::DOF::Types::Dirichlet:
               continue;
             case DOF_Info::DOF::Types::Gamma:
-              numericalSolution[point_info.Index] = internalSolution[
-                                                    dofs.Num_Internals +
+              numericalSolution[point_info.Index] = u_G[
                                                     dofs.Cell0Ds_DOF[point_info.Index].Global_Index];
               break;
             case DOF_Info::DOF::Types::Internal:
-              numericalSolution[point_info.Index] = internalSolution[
-                                                    dofs.Cell0Ds_DOF[point_info.Index].Global_Index];
+              numericalSolution[point_info.Index] = u_I[
+                                                    dofs.Cell0Ds_DOF[point_info.Index].Local_Index];
               break;
             default:
               throw runtime_error("unkwnon point type");
           }
-
         }
       }
 
