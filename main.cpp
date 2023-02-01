@@ -5,8 +5,6 @@
 
 #include <mpi.h>
 
-#define TEST_MPI false
-
 using namespace std;
 
 // ***************************************************************************
@@ -33,16 +31,8 @@ int main(int argc, char** argv)
   Gedim::Configurations::Initialize(argc, argv);
 
   DOMAIN_DECOMPOSITION::EllipticProblem program(programConfiguration);
-#if !TEST_MPI
   program.Run(rank,
               n_domains);
-#else
-  for (unsigned int r = 0; r < 4; r++)
-  {
-    program.Run(r,
-                4);
-  }
-#endif
 
   // Close Program
   Gedim::Configurations::Reset();

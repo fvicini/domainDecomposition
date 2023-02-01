@@ -575,36 +575,44 @@ namespace DOMAIN_DECOMPOSITION
     u_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
     u_G.SetSize(dofs.Num_Gamma);
 
+    // compute cholesky factorization of A_II
+    Gedim::Eigen_CholeskySolver<> A_II_solver;
+    A_II_solver.Initialize(A_II);
+
     if (dofs.Num_Gamma == 0)
     {
-      Gedim::Eigen_CholeskySolver<> choleskySolver;
-      choleskySolver.Initialize(A_II,
-                                f_I,
-                                u_I);
-      choleskySolver.Solve();
-
+      A_II_solver.Solve(f_I, u_I);
       return;
     }
 
     // initialize auxiliary variables
-    Gedim::Eigen_Array<> h_I, g;
+    Gedim::Eigen_Array<> h_I, g_A_GI_h, g;
 
     h_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
-
-    // solve internal system
-    Gedim::Eigen_CholeskySolver<> choleskySolver;
-    choleskySolver.Initialize(A_II,
-                              f_I,
-                              h_I);
-    choleskySolver.Solve();
-
-    if (dofs.Num_Gamma == 0)
-      return;
-
+    g_A_GI_h.SetSize(dofs.Num_Gamma);
     g.SetSize(dofs.Num_Gamma);
 
-    g += f_G;
+    // solve internal system A_II h_I = f_I
+    A_II_solver.Solve(f_I, h_I);
 
+    {
+      using namespace Gedim;
+      cout<< "Process "<< rank<< " h_I: "<< h_I<< endl;
+      MPI_Barrier(MPI_COMM_WORLD);
+    }
+
+    // compute g_A_GI_h = A_GI * h_I
+    g_A_GI_h.SumMultiplication(A_GI, h_I);
+
+    // compute on master sum_domain A_GI * h_I
+    MPI_Reduce(g_A_GI_h.Data(), g.Data(), g.Size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    if (rank == 0)
+    {
+      // compute g = f_G - sum_domain A_GI * h_I
+      g *= -1.0;
+      g += f_G;
+    }
   }
   // ***************************************************************************
   void DD_Utilities::ComputeErrors(const int& rank,
