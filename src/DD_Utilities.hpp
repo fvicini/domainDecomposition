@@ -125,6 +125,10 @@ namespace DOMAIN_DECOMPOSITION
                          const double& tolerance,
                          Gedim::IArray& u_G);
 
+      static void PrintArray(const int& rank,
+                             const std::string& v_name,
+                             const Gedim::IArray& v);
+
     public:
       DD_Utilities();
       ~DD_Utilities();
