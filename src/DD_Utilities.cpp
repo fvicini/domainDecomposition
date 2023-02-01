@@ -105,11 +105,10 @@ namespace DOMAIN_DECOMPOSITION
     rhs_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
     Sp.SetSize(dofs.Num_Gamma);
 
-    // compute rhs_I = sum_domain - A_IG * p
+    // compute rhs_I = - A_IG * p
     rhs_I.SubtractionMultiplication(A_IG, p);
-    MPI_Allreduce(MPI_IN_PLACE, rhs_I.Data(), rhs_I.Size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-    // solve A_II w_I = sum_domain - A_IG * p
+    // solve A_II w_I = - A_IG * p
     A_II_solver.Solve(rhs_I, w_I);
 
     // compute Sp = sum_domain A_GI * w_I + A_GG * p
@@ -152,7 +151,6 @@ namespace DOMAIN_DECOMPOSITION
       }
 
       beta_k = (!conjugate || iteration == 0) ? 0.0 : r_k_dot / r_k_1_dot;
-      cerr<< scientific<< "Process "<< rank<< " beta_k "<< beta_k<< endl;
 
       // compute p_k = r_k + beta_k * p_k_1
       p_k *= beta_k;
@@ -169,7 +167,6 @@ namespace DOMAIN_DECOMPOSITION
                        Sp_k);
 
       alpha_k = r_k_dot / p_k.Dot(Sp_k);
-      cerr<< scientific<< "Process "<< rank<< " alpha_k "<< alpha_k<< endl;
 
       // compute u_G_k = u_G_k_1 + alpha_k * p_k
       u_G += (p_k * alpha_k);
@@ -724,10 +721,8 @@ namespace DOMAIN_DECOMPOSITION
                conjugate,
                u_G);
 
-    // solve A_II * u_i = f_I - sum_domain A_IG * u_g
+    // solve A_II * u_i = f_I - A_IG * u_g
     rhs_I.SubtractionMultiplication(A_IG, u_G);
-    MPI_Allreduce(MPI_IN_PLACE, rhs_I.Data(), rhs_I.Size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-
     rhs_I += f_I;
 
     A_II_solver.Solve(rhs_I, u_I);
