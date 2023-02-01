@@ -118,16 +118,17 @@ namespace DOMAIN_DECOMPOSITION
     MPI_Allreduce(MPI_IN_PLACE, Sp.Data(), Sp.Size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
   }
   // ***************************************************************************
-  void DD_Utilities::ShurCG(const int& rank,
-                            const DOF_Info& dofs,
-                            const Gedim::ILinearSolver& A_II_solver,
-                            const Gedim::ISparseArray& A_IG,
-                            const Gedim::ISparseArray& A_GI,
-                            const Gedim::ISparseArray& A_GG,
-                            const Gedim::IArray& g,
-                            const unsigned int& max_iterations,
-                            const double& tolerance,
-                            Gedim::IArray& u_G)
+  void DD_Utilities::ShurSolver(const int& rank,
+                                const DOF_Info& dofs,
+                                const Gedim::ILinearSolver& A_II_solver,
+                                const Gedim::ISparseArray& A_IG,
+                                const Gedim::ISparseArray& A_GI,
+                                const Gedim::ISparseArray& A_GG,
+                                const Gedim::IArray& g,
+                                const unsigned int& max_iterations,
+                                const double& tolerance,
+                                const bool& conjugate,
+                                Gedim::IArray& u_G)
   {
     Gedim::Eigen_Array<> r_k, p_k, Sp_k;
     r_k.Copy(g);
@@ -145,16 +146,17 @@ namespace DOMAIN_DECOMPOSITION
     {
       if (rank == 0)
       {
-        cout<< scientific<< "CG"<< " ";
+        cout<< scientific<< "Schur Solver"<< " ";
         cout<< "it "<< iteration<< "/"<< max_iterations<< " ";
-        cout<< "res "<< sqrt(r_k_dot)<< "/"<< tolerance * sqrt(r_k_dot)<< endl;
+        cout<< "res "<< sqrt(r_k_dot)<< "/"<< tolerance * sqrt(r_0_dot)<< endl;
       }
 
-      beta_k = (iteration == 0) ? 0.0 : r_k_dot / r_k_1_dot;
+      beta_k = (!conjugate || iteration == 0) ? 0.0 : r_k_dot / r_k_1_dot;
+      cerr<< scientific<< "Process "<< rank<< " beta_k "<< beta_k<< endl;
 
       // compute p_k = r_k + beta_k * p_k_1
       p_k *= beta_k;
-      p_k += r_k;
+      p_k += r_k; // Conjugate Gradient
 
       // compute S * p_k
       ApplyShurToArray(rank,
@@ -167,6 +169,7 @@ namespace DOMAIN_DECOMPOSITION
                        Sp_k);
 
       alpha_k = r_k_dot / p_k.Dot(Sp_k);
+      cerr<< scientific<< "Process "<< rank<< " alpha_k "<< alpha_k<< endl;
 
       // compute u_G_k = u_G_k_1 + alpha_k * p_k
       u_G += (p_k * alpha_k);
@@ -671,6 +674,9 @@ namespace DOMAIN_DECOMPOSITION
                            const Gedim::ISparseArray& A_GG,
                            const Gedim::IArray& f_I,
                            const Gedim::IArray& f_G,
+                           const unsigned int& max_iterations,
+                           const double& tolerance,
+                           const bool& conjugate,
                            Gedim::IArray& u_I,
                            Gedim::IArray& u_G)
   {
@@ -706,16 +712,17 @@ namespace DOMAIN_DECOMPOSITION
     PrintArray(rank, "g", g);
 
     // solve S u_G = g with CG
-    ShurCG(rank,
-           dofs,
-           A_II_solver,
-           A_IG,
-           A_GI,
-           A_GG,
-           g,
-           1000,
-           1.0e-6,
-           u_G);
+    ShurSolver(rank,
+               dofs,
+               A_II_solver,
+               A_IG,
+               A_GI,
+               A_GG,
+               g,
+               max_iterations,
+               tolerance,
+               conjugate,
+               u_G);
 
     // solve A_II * u_i = f_I - sum_domain A_IG * u_g
     rhs_I.SubtractionMultiplication(A_IG, u_G);
@@ -854,14 +861,20 @@ namespace DOMAIN_DECOMPOSITION
     {
       Gedim::VTKUtilities exporter;
 
-      const Eigen::MatrixXd coordinates = globalMesh.Cell0DsCoordinates();
-      Eigen::VectorXd exactSolution = PDE_Equation::ExactSolution(coordinates);
-      vector<double> numericalSolution(globalMesh.Cell0DTotalNumber(), 0.0);
+      const unsigned int numPoints = problem_info.Num_1D_points_domain *
+                                     problem_info.Num_1D_points_domain;
+
+      Eigen::MatrixXd coordinates = Eigen::MatrixXd(3,
+                                                    numPoints);
+
+      vector<double> numericalSolution(numPoints, 0.0);
 
       for (unsigned int j_domain = 0; j_domain < problem_info.Num_1D_points_domain; j_domain++)
       {
         for (unsigned int i_domain = 0; i_domain < problem_info.Num_1D_points_domain; i_domain++)
         {
+          const unsigned int point_index = j_domain * problem_info.Num_1D_points_domain + i_domain;
+
           const Domain_Info domain_info = GetDomain_Info_Global(rank,
                                                                 i_domain,
                                                                 j_domain,
@@ -872,17 +885,19 @@ namespace DOMAIN_DECOMPOSITION
                                                           domain_info.Axes_Index.at(1),
                                                           problem_info.Num_1D_points);
 
+          coordinates.col(point_index)<< globalMesh.Cell0DCoordinates(point_info.Index);
+
           switch (dofs.Cell0Ds_DOF[point_info.Index].Type)
           {
             case DOF_Info::DOF::Types::Dirichlet:
               continue;
             case DOF_Info::DOF::Types::Gamma:
-              numericalSolution[point_info.Index] = u_G[
-                                                    dofs.Cell0Ds_DOF[point_info.Index].Global_Index];
+              numericalSolution[point_index] = u_G[
+                                               dofs.Cell0Ds_DOF[point_info.Index].Global_Index];
               break;
             case DOF_Info::DOF::Types::Internal:
-              numericalSolution[point_info.Index] = u_I[
-                                                    dofs.Cell0Ds_DOF[point_info.Index].Local_Index];
+              numericalSolution[point_index] = u_I[
+                                               dofs.Cell0Ds_DOF[point_info.Index].Local_Index];
               break;
             default:
               throw runtime_error("unkwnon point type");
@@ -890,27 +905,28 @@ namespace DOMAIN_DECOMPOSITION
         }
       }
 
-      exporter.AddPolygons(coordinates,
-                           globalMesh.Cell2DsVertices(),
+      const Eigen::VectorXd exactSolution = PDE_Equation::ExactSolution(coordinates);
+
+      exporter.AddPoints(coordinates,
+                         {
                            {
-                             {
-                               "Numerical",
-                               Gedim::VTPProperty::Formats::Points,
-                               static_cast<unsigned int>(numericalSolution.size()),
-                               numericalSolution.data()
-                             },
-                             {
-                               "Exact",
-                               Gedim::VTPProperty::Formats::Points,
-                               static_cast<unsigned int>(exactSolution.size()),
-                               exactSolution.data()
-                             }
-                           });
+                             "Numerical",
+                             Gedim::VTPProperty::Formats::Points,
+                             static_cast<unsigned int>(numericalSolution.size()),
+                             numericalSolution.data()
+                           },
+                           {
+                             "Exact",
+                             Gedim::VTPProperty::Formats::Points,
+                             static_cast<unsigned int>(exactSolution.size()),
+                             exactSolution.data()
+                           }
+                         });
 
       exporter.Export(exportFolder +
                       "/Solution_" +
                       to_string(rank) +
-                      "_Mesh_Cell2Ds" +
+                      "_Mesh_Cell0Ds" +
                       ".vtu");
     }
   }

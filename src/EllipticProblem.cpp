@@ -34,6 +34,17 @@ namespace DOMAIN_DECOMPOSITION
     Gedim::Configurations::AddProperty("MeshParameter",
                                        0.25,
                                        "Mesh Parameter (Default: 0.25)");
+
+    // Schur Solver parameters
+    Gedim::Configurations::AddProperty("SchurSolverMaxIterations",
+                                       (unsigned int)10,
+                                       "Schur Solver MaxIterations (Default: 10)");
+    Gedim::Configurations::AddProperty("SchurSolverTolerance",
+                                       1.0e-6,
+                                       "Schur Solver Tolerance (Default: 1.0e-6)");
+    Gedim::Configurations::AddProperty("SchurSolverType",
+                                       false,
+                                       "Schur Solver Type, true conjugate (Default: false)");
   }
   // ***************************************************************************
   EllipticProblem::EllipticProblem(const EllipticProblem_ProgramConfiguration& config) :
@@ -256,6 +267,9 @@ namespace DOMAIN_DECOMPOSITION
                         A_GG,
                         f_I,
                         f_G,
+                        config.SchurSolverMaxIterations(),
+                        config.SchurSolverTolerance(),
+                        config.SchurSolverType(),
                         u_I,
                         u_G);
 

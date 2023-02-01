@@ -18,6 +18,12 @@ namespace DOMAIN_DECOMPOSITION
       { return Gedim::Configurations::GetPropertyValue<double>("GeometricTolerance"); }
       inline double MeshParameter() const
       { return Gedim::Configurations::GetPropertyValue<double>("MeshParameter"); }
+      inline unsigned int SchurSolverMaxIterations() const
+      { return Gedim::Configurations::GetPropertyValue<unsigned int>("SchurSolverMaxIterations"); }
+      inline double SchurSolverTolerance() const
+      { return Gedim::Configurations::GetPropertyValue<double>("SchurSolverTolerance"); }
+      inline bool SchurSolverType() const
+      { return Gedim::Configurations::GetPropertyValue<bool>("SchurSolverType"); }
   };
 
   class EllipticProblem final

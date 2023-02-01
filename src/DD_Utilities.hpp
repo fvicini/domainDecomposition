@@ -113,17 +113,18 @@ namespace DOMAIN_DECOMPOSITION
                                    const Gedim::IArray& p,
                                    Gedim::IArray& Sp);
 
-      /// \brief Solve S u_G = g with CG algorithm
-      static void ShurCG(const int& rank,
-                         const DOF_Info& dofs,
-                         const Gedim::ILinearSolver& A_II_solver,
-                         const Gedim::ISparseArray& A_IG,
-                         const Gedim::ISparseArray& A_GI,
-                         const Gedim::ISparseArray& A_GG,
-                         const Gedim::IArray& g,
-                         const unsigned int& max_iterations,
-                         const double& tolerance,
-                         Gedim::IArray& u_G);
+      /// \brief Solve S u_G = g with iterative algorithm
+      static void ShurSolver(const int& rank,
+                             const DOF_Info& dofs,
+                             const Gedim::ILinearSolver& A_II_solver,
+                             const Gedim::ISparseArray& A_IG,
+                             const Gedim::ISparseArray& A_GI,
+                             const Gedim::ISparseArray& A_GG,
+                             const Gedim::IArray& g,
+                             const unsigned int& max_iterations,
+                             const double& tolerance,
+                             const bool& conjugate,
+                             Gedim::IArray& u_G);
 
       static void PrintArray(const int& rank,
                              const std::string& v_name,
@@ -183,6 +184,9 @@ namespace DOMAIN_DECOMPOSITION
                         const Gedim::ISparseArray& A_GG,
                         const Gedim::IArray& f_I,
                         const Gedim::IArray& f_G,
+                        const unsigned int& max_iterations,
+                        const double& tolerance,
+                        const bool& conjugate,
                         Gedim::IArray& u_I,
                         Gedim::IArray& u_G);
 
