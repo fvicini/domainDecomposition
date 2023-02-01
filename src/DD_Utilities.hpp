@@ -137,6 +137,19 @@ namespace DOMAIN_DECOMPOSITION
                            Gedim::IArray& f_I,
                            Gedim::IArray& f_G);
 
+      static void Solve(const int& rank,
+                        const Problem_Info& problem_info,
+                        const Gedim::IMeshDAO& globalMesh,
+                        const DOF_Info& dofs,
+                        const Gedim::ISparseArray& A_II,
+                        const Gedim::ISparseArray& A_IG,
+                        const Gedim::ISparseArray& A_GI,
+                        const Gedim::ISparseArray& A_GG,
+                        const Gedim::IArray& f_I,
+                        const Gedim::IArray& f_G,
+                        Gedim::IArray& u_I,
+                        Gedim::IArray& u_G);
+
       static void ComputeErrors(const int& rank,
                                 const Problem_Info& problem_info,
                                 const Gedim::IMeshDAO& globalMesh,

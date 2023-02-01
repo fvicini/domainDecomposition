@@ -1,5 +1,6 @@
 #include "DD_Utilities.hpp"
 
+#include "Eigen_CholeskySolver.hpp"
 #include "Fem2DSquareLagrangePCC.hpp"
 #include "PDE_Equation.hpp"
 #include "VTKUtilities.hpp"
@@ -518,6 +519,27 @@ namespace DOMAIN_DECOMPOSITION
     A_IG.Create();
     A_GI.Create();
     A_GG.Create();
+  }
+  // ***************************************************************************
+  void DD_Utilities::Solve(const int& rank,
+                           const Problem_Info& problem_info,
+                           const Gedim::IMeshDAO& globalMesh,
+                           const DOF_Info& dofs,
+                           const Gedim::ISparseArray& A_II,
+                           const Gedim::ISparseArray& A_IG,
+                           const Gedim::ISparseArray& A_GI,
+                           const Gedim::ISparseArray& A_GG,
+                           const Gedim::IArray& f_I,
+                           const Gedim::IArray& f_G,
+                           Gedim::IArray& u_I,
+                           Gedim::IArray& u_G)
+  {
+    // solve internal system
+    Gedim::Eigen_CholeskySolver<> choleskySolver;
+    choleskySolver.Initialize(A_II,
+                              f_I,
+                              u_I);
+    choleskySolver.Solve();
   }
   // ***************************************************************************
   void DD_Utilities::ComputeErrors(const int& rank,

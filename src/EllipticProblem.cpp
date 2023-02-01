@@ -260,11 +260,18 @@ namespace DOMAIN_DECOMPOSITION
     /// Solve
     DD_Utilities::PrintMessage(rank, cout, "Solve...", false);
 
-    Gedim::Eigen_CholeskySolver<> choleskySolver;
-    choleskySolver.Initialize(A_II,
-                              f_I,
-                              u_I);
-    choleskySolver.Solve();
+    DD_Utilities::Solve(rank,
+                        problem_info,
+                        domainMesh,
+                        dofs,
+                        A_II,
+                        A_IG,
+                        A_GI,
+                        A_GG,
+                        f_I,
+                        f_G,
+                        u_I,
+                        u_G);
 
     DD_Utilities::PrintMessage(rank, cout, "Solve SUCCESS", false);
 
