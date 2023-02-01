@@ -53,13 +53,14 @@ namespace DOMAIN_DECOMPOSITION
               };
 
               Types Type = Types::Unknwon;
-              unsigned int GlobalIndex = 0;
+              unsigned int Global_Index = 0; // index global in all domains
+              unsigned int Local_Index = 0; // index local in the domain
           };
 
           struct Domain_DOF
           {
-            unsigned int Num_Internals = 0;
-            unsigned int Starting_Index = 0;
+              unsigned int Num_Internals = 0;
+              unsigned int Starting_Index = 0;
           };
 
           unsigned int Num_Dirichlets = 0;

@@ -256,10 +256,12 @@ namespace DOMAIN_DECOMPOSITION
       switch (info.Cell0Ds_DOF[p].Type)
       {
         case DOF_Info::DOF::Types::Dirichlet:
-          info.Cell0Ds_DOF[p].GlobalIndex = dirichlet_counter++;
+          info.Cell0Ds_DOF[p].Global_Index = dirichlet_counter++;
+          info.Cell0Ds_DOF[p].Local_Index = info.Cell0Ds_DOF[p].Global_Index;
           break;
         case DOF_Info::DOF::Types::Gamma:
-          info.Cell0Ds_DOF[p].GlobalIndex = gamma_counter++;
+          info.Cell0Ds_DOF[p].Global_Index = gamma_counter++;
+          info.Cell0Ds_DOF[p].Local_Index = info.Cell0Ds_DOF[p].Global_Index;
           break;
         case DOF_Info::DOF::Types::Internal:
           continue;
@@ -279,6 +281,7 @@ namespace DOMAIN_DECOMPOSITION
     {
       info.Domains_DOF[rank].Num_Internals = 0;
       info.Domains_DOF[rank].Starting_Index = internal_counter;
+      unsigned int local_internal_counter = 0;
 
       for (unsigned int j_domain = 0; j_domain < problem_info.Num_1D_points_domain; j_domain++)
       {
@@ -301,7 +304,8 @@ namespace DOMAIN_DECOMPOSITION
               continue;
             case DOF_Info::DOF::Types::Internal:
               info.Domains_DOF[rank].Num_Internals++;
-              info.Cell0Ds_DOF[point_info.Index].GlobalIndex = internal_counter++;
+              info.Cell0Ds_DOF[point_info.Index].Global_Index = internal_counter++;
+              info.Cell0Ds_DOF[point_info.Index].Local_Index = local_internal_counter++;
               break;
             default:
               throw runtime_error("unkwnon point type");
@@ -324,27 +328,35 @@ namespace DOMAIN_DECOMPOSITION
       Gedim::VTKUtilities exporter;
 
       vector<double> dofsType(globalMesh.Cell0DTotalNumber());
-      vector<double> dofsIndex(globalMesh.Cell0DTotalNumber());
+      vector<double> dofsGlobalIndex(globalMesh.Cell0DTotalNumber());
+      vector<double> dofsLocalIndex(globalMesh.Cell0DTotalNumber());
 
       for (unsigned int p = 0; p < globalMesh.Cell0DTotalNumber(); p++)
       {
         dofsType[p] = (double)dofs.Cell0Ds_DOF[p].Type;
-        dofsIndex[p] = dofs.Cell0Ds_DOF[p].GlobalIndex;
+        dofsGlobalIndex[p] = dofs.Cell0Ds_DOF[p].Global_Index;
+        dofsLocalIndex[p] = dofs.Cell0Ds_DOF[p].Local_Index;
       }
 
       exporter.AddPoints(globalMesh.Cell0DsCoordinates(),
                          {
                            {
-                             "DofType",
+                             "Type",
                              Gedim::VTPProperty::Formats::Cells,
                              static_cast<unsigned int>(dofsType.size()),
                              dofsType.data()
                            },
                            {
-                             "DofIndex",
+                             "Global_Index",
                              Gedim::VTPProperty::Formats::Cells,
-                             static_cast<unsigned int>(dofsIndex.size()),
-                             dofsIndex.data()
+                             static_cast<unsigned int>(dofsGlobalIndex.size()),
+                             dofsGlobalIndex.data()
+                           },
+                           {
+                             "Local_Index",
+                             Gedim::VTPProperty::Formats::Cells,
+                             static_cast<unsigned int>(dofsLocalIndex.size()),
+                             dofsLocalIndex.data()
                            }
                          });
 
@@ -445,8 +457,9 @@ namespace DOMAIN_DECOMPOSITION
           if (dofs.Cell0Ds_DOF[i_mesh_point_index].Type ==
               DOF_Info::DOF::Types::Internal)
           {
-            const unsigned int i_glb = dofs.Cell0Ds_DOF[i_mesh_point_index].GlobalIndex;
-            f_I.AddValue(i_glb,
+            const unsigned int i_dom_loc = dofs.Cell0Ds_DOF[i_mesh_point_index].Local_Index;
+
+            f_I.AddValue(i_dom_loc,
                          f[i_loc]);
 
             for (unsigned int j_loc = 0; j_loc < localSpace.NumberBasisFunctions; j_loc++)
@@ -460,16 +473,18 @@ namespace DOMAIN_DECOMPOSITION
               if (dofs.Cell0Ds_DOF[j_mesh_point_index].Type ==
                   DOF_Info::DOF::Types::Internal)
               {
-                const unsigned int j_glb = dofs.Cell0Ds_DOF[j_mesh_point_index].GlobalIndex;
-                A_II.Triplet(i_glb,
-                             j_glb,
+                const unsigned int j_dom_loc = dofs.Cell0Ds_DOF[j_mesh_point_index].Local_Index;
+
+                A_II.Triplet(i_dom_loc,
+                             j_dom_loc,
                              A(i_loc, j_loc));
               }
               else if (dofs.Cell0Ds_DOF[j_mesh_point_index].Type ==
                        DOF_Info::DOF::Types::Gamma)
               {
-                const unsigned int j_glb = dofs.Cell0Ds_DOF[j_mesh_point_index].GlobalIndex;
-                A_IG.Triplet(i_glb,
+                const unsigned int j_glb = dofs.Cell0Ds_DOF[j_mesh_point_index].Global_Index;
+
+                A_IG.Triplet(i_dom_loc,
                              j_glb,
                              A(i_loc, j_loc));
               }
@@ -480,7 +495,8 @@ namespace DOMAIN_DECOMPOSITION
           else if (dofs.Cell0Ds_DOF[i_mesh_point_index].Type ==
                    DOF_Info::DOF::Types::Gamma)
           {
-            const unsigned int i_glb = dofs.Cell0Ds_DOF[i_mesh_point_index].GlobalIndex;
+            const unsigned int i_glb = dofs.Cell0Ds_DOF[i_mesh_point_index].Global_Index;
+
             f_G.AddValue(i_glb,
                          f[i_loc]);
 
@@ -495,15 +511,17 @@ namespace DOMAIN_DECOMPOSITION
               if (dofs.Cell0Ds_DOF[j_mesh_point_index].Type ==
                   DOF_Info::DOF::Types::Internal)
               {
-                const unsigned int j_glb = dofs.Cell0Ds_DOF[j_mesh_point_index].GlobalIndex;
+                const unsigned int j_dom_loc = dofs.Cell0Ds_DOF[j_mesh_point_index].Local_Index;
+
                 A_GI.Triplet(i_glb,
-                             j_glb,
+                             j_dom_loc,
                              A(i_loc, j_loc));
               }
               else if (dofs.Cell0Ds_DOF[j_mesh_point_index].Type ==
                        DOF_Info::DOF::Types::Gamma)
               {
-                const unsigned int j_glb = dofs.Cell0Ds_DOF[j_mesh_point_index].GlobalIndex;
+                const unsigned int j_glb = dofs.Cell0Ds_DOF[j_mesh_point_index].Global_Index;
+
                 A_GG.Triplet(i_glb,
                              j_glb,
                              A(i_loc, j_loc));
@@ -634,9 +652,9 @@ namespace DOMAIN_DECOMPOSITION
 
           const unsigned int i_glb = dofs.Cell0Ds_DOF[i_mesh_point_index].Type ==
                                      DOF_Info::DOF::Types::Internal ?
-                                       dofs.Cell0Ds_DOF[i_mesh_point_index].GlobalIndex :
+                                       dofs.Cell0Ds_DOF[i_mesh_point_index].Global_Index :
                                        dofs.Num_Internals +
-                                       dofs.Cell0Ds_DOF[i_mesh_point_index].GlobalIndex;
+                                       dofs.Cell0Ds_DOF[i_mesh_point_index].Global_Index;
 
           localNumericSolution[i_loc] = internalSolution[i_glb];
         }
@@ -691,11 +709,11 @@ namespace DOMAIN_DECOMPOSITION
             case DOF_Info::DOF::Types::Gamma:
               numericalSolution[point_info.Index] = internalSolution[
                                                     dofs.Num_Internals +
-                                                    dofs.Cell0Ds_DOF[point_info.Index].GlobalIndex];
+                                                    dofs.Cell0Ds_DOF[point_info.Index].Global_Index];
               break;
             case DOF_Info::DOF::Types::Internal:
               numericalSolution[point_info.Index] = internalSolution[
-                                                    dofs.Cell0Ds_DOF[point_info.Index].GlobalIndex];
+                                                    dofs.Cell0Ds_DOF[point_info.Index].Global_Index];
               break;
             default:
               throw runtime_error("unkwnon point type");
