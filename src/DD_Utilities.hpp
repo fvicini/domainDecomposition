@@ -1,6 +1,7 @@
 #ifndef __DD_Utilities_H
 #define __DD_Utilities_H
 
+#include "ILinearSolver.hpp"
 #include "ISparseArray.hpp"
 #include "IArray.hpp"
 #include "IMeshDAO.hpp"
@@ -101,6 +102,29 @@ namespace DOMAIN_DECOMPOSITION
                                                const unsigned int& j_domain,
                                                const unsigned int& n_1D_domains,
                                                const unsigned int& n_1D_squares_domain);
+
+      /// \brief Given an array p it computes the Schur complement product S*p
+      static void ApplyShurToArray(const int& rank,
+                                   const DOF_Info& dofs,
+                                   const Gedim::ILinearSolver& A_II_solver,
+                                   const Gedim::ISparseArray& A_IG,
+                                   const Gedim::ISparseArray& A_GI,
+                                   const Gedim::ISparseArray& A_GG,
+                                   const Gedim::IArray& p,
+                                   Gedim::IArray& Sp);
+
+      /// \brief Solve S u_G = g with CG algorithm
+      static void ShurCG(const int& rank,
+                         const DOF_Info& dofs,
+                         const Gedim::ILinearSolver& A_II_solver,
+                         const Gedim::ISparseArray& A_IG,
+                         const Gedim::ISparseArray& A_GI,
+                         const Gedim::ISparseArray& A_GG,
+                         const Gedim::IArray& u_G_0,
+                         const unsigned int& numIterations,
+                         const double& tolerance,
+                         Gedim::IArray& u_G);
+
     public:
       DD_Utilities();
       ~DD_Utilities();

@@ -90,6 +90,53 @@ namespace DOMAIN_DECOMPOSITION
     return info;
   }
   // ***************************************************************************
+  void DD_Utilities::ApplyShurToArray(const int& rank,
+                                      const DOF_Info& dofs,
+                                      const Gedim::ILinearSolver& A_II_solver,
+                                      const Gedim::ISparseArray& A_IG,
+                                      const Gedim::ISparseArray& A_GI,
+                                      const Gedim::ISparseArray& A_GG,
+                                      const Gedim::IArray& p,
+                                      Gedim::IArray& Sp)
+  {
+    Gedim::Eigen_Array<> w_I, A_IG_p, A_GI_w;
+
+    w_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
+    A_IG_p.SetSize(dofs.Domains_DOF[rank].Num_Internals);
+    A_GI_w.SetSize(dofs.Num_Gamma);
+    Sp.SetSize(dofs.Num_Gamma);
+
+    // compute -A_IG * p
+    A_IG_p.SubtractionMultiplication(A_IG, p);
+    // solve A_II w_I = -A_IG * p)
+    A_II_solver.Solve(A_IG_p, w_I);
+
+    // compute A_GI_w = A_GI * w_I
+    A_GI_w.SumMultiplication(A_GI, w_I);
+
+    // compute on master sum_domain A_GI * w_I
+    MPI_Reduce(A_GI_w.Data(), Sp.Data(), Sp.Size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    if (rank == 0)
+    {
+      // compute Sp = sum_domain A_GI * h_I + A_GG * p
+      Sp.SumMultiplication(A_GG, p);
+    }
+  }
+  // ***************************************************************************
+  void DD_Utilities::ShurCG(const int& rank,
+                            const DOF_Info& dofs,
+                            const Gedim::ILinearSolver& A_II_solver,
+                            const Gedim::ISparseArray& A_IG,
+                            const Gedim::ISparseArray& A_GI,
+                            const Gedim::ISparseArray& A_GG,
+                            const Gedim::IArray& u_G_0,
+                            const unsigned int& numIterations,
+                            const double& tolerance,
+                            Gedim::IArray& u_G)
+  {
+  }
+  // ***************************************************************************
   DD_Utilities::Problem_Info DD_Utilities::ComputeProblemInfo(const int& rank,
                                                               const int& n_domains,
                                                               const Gedim::IMeshDAO& globalMesh)
@@ -601,18 +648,20 @@ namespace DOMAIN_DECOMPOSITION
       MPI_Barrier(MPI_COMM_WORLD);
     }
 
-    // compute g_A_GI_h = A_GI * h_I
-    g_A_GI_h.SumMultiplication(A_GI, h_I);
+    // compute g_A_GI_h = -A_GI * h_I
+    g_A_GI_h.SubtractionMultiplication(A_GI, h_I);
 
-    // compute on master sum_domain A_GI * h_I
+    // compute on master -sum_domain A_GI * h_I
     MPI_Reduce(g_A_GI_h.Data(), g.Data(), g.Size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
     if (rank == 0)
     {
       // compute g = f_G - sum_domain A_GI * h_I
-      g *= -1.0;
       g += f_G;
     }
+
+    // solve S u_G = g with CG
+
   }
   // ***************************************************************************
   void DD_Utilities::ComputeErrors(const int& rank,
