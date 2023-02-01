@@ -1,6 +1,7 @@
 #include "DD_Utilities.hpp"
 
 #include "Eigen_CholeskySolver.hpp"
+#include "Eigen_Array.hpp"
 #include "Fem2DSquareLagrangePCC.hpp"
 #include "PDE_Equation.hpp"
 #include "VTKUtilities.hpp"
@@ -380,6 +381,20 @@ namespace DOMAIN_DECOMPOSITION
                               Gedim::IArray& f_I,
                               Gedim::IArray& f_G)
   {
+    A_II.SetSize(dofs.Domains_DOF[rank].Num_Internals,
+                 dofs.Domains_DOF[rank].Num_Internals,
+                 Gedim::ISparseArray::SparseArrayTypes::Symmetric);
+    A_IG.SetSize(dofs.Domains_DOF[rank].Num_Internals,
+                 dofs.Num_Gamma);
+    A_GI.SetSize(dofs.Num_Gamma,
+                 dofs.Domains_DOF[rank].Num_Internals);
+    A_GG.SetSize(dofs.Num_Gamma,
+                 dofs.Num_Gamma,
+                 Gedim::ISparseArray::SparseArrayTypes::Symmetric);
+
+    f_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
+    f_G.SetSize(dofs.Num_Gamma);
+
     Eigen::MatrixXd referenceSquare_quadraturePoints;
     Eigen::VectorXd referenceSquare_quadratureWeights;
     Gedim::Quadrature_Gauss2D_Square::FillPointsAndWeights(2,
@@ -557,12 +572,39 @@ namespace DOMAIN_DECOMPOSITION
                            Gedim::IArray& u_I,
                            Gedim::IArray& u_G)
   {
+    u_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
+    u_G.SetSize(dofs.Num_Gamma);
+
+    if (dofs.Num_Gamma == 0)
+    {
+      Gedim::Eigen_CholeskySolver<> choleskySolver;
+      choleskySolver.Initialize(A_II,
+                                f_I,
+                                u_I);
+      choleskySolver.Solve();
+
+      return;
+    }
+
+    // initialize auxiliary variables
+    Gedim::Eigen_Array<> h_I, g;
+
+    h_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
+
     // solve internal system
     Gedim::Eigen_CholeskySolver<> choleskySolver;
     choleskySolver.Initialize(A_II,
                               f_I,
-                              u_I);
+                              h_I);
     choleskySolver.Solve();
+
+    if (dofs.Num_Gamma == 0)
+      return;
+
+    g.SetSize(dofs.Num_Gamma);
+
+    g += f_G;
+
   }
   // ***************************************************************************
   void DD_Utilities::ComputeErrors(const int& rank,

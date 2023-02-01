@@ -228,23 +228,6 @@ namespace DOMAIN_DECOMPOSITION
                          dofs.Num_Internals > 0,
                          "Number of internals should be positive");
 
-    A_II.SetSize(dofs.Domains_DOF[rank].Num_Internals,
-                 dofs.Domains_DOF[rank].Num_Internals,
-                 Gedim::ISparseArray::SparseArrayTypes::Symmetric);
-    A_IG.SetSize(dofs.Domains_DOF[rank].Num_Internals,
-                 dofs.Num_Gamma);
-    A_GI.SetSize(dofs.Num_Gamma,
-                 dofs.Domains_DOF[rank].Num_Internals);
-    A_GG.SetSize(dofs.Num_Gamma,
-                 dofs.Num_Gamma,
-                 Gedim::ISparseArray::SparseArrayTypes::Symmetric);
-
-    f_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
-    f_G.SetSize(dofs.Num_Gamma);
-
-    u_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
-    u_G.SetSize(dofs.Num_Gamma);
-
     DD_Utilities::Assemble(rank,
                            problem_info,
                            domainMesh,
