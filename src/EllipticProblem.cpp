@@ -217,18 +217,30 @@ namespace DOMAIN_DECOMPOSITION
     /// Assemble System
     DD_Utilities::PrintMessage(rank, cout, "Assemble System FEM...", false);
 
-    const unsigned int numDofs = dofs.Num_Internals + dofs.Num_Gamma;
+    Gedim::Eigen_SparseArray<> A_II, A_IG, A_GI, A_GG;
+    Gedim::Eigen_Array<> f_I, f_G;
+    Gedim::Eigen_Array<> u_I, u_G;
 
-    Gedim::Eigen_SparseArray<> globalMatrixA;
-    Gedim::Eigen_Array<> rightHandSide;
-    Gedim::Eigen_Array<> internalSolution;
+    DD_Utilities::Assert(rank,
+                         dofs.Num_Internals > 0,
+                         "Number of internals should be positive");
 
-    if (numDofs > 0)
-    {
-      globalMatrixA.SetSize(numDofs, numDofs, Gedim::ISparseArray::SparseArrayTypes::Symmetric);
-      rightHandSide.SetSize(numDofs);
-      internalSolution.SetSize(numDofs);
-    }
+    A_II.SetSize(dofs.Num_Internals,
+                 dofs.Num_Internals,
+                 Gedim::ISparseArray::SparseArrayTypes::Symmetric);
+    A_IG.SetSize(dofs.Num_Internals,
+                 dofs.Num_Gamma);
+    A_GI.SetSize(dofs.Num_Gamma,
+                 dofs.Num_Internals);
+    A_GG.SetSize(dofs.Num_Gamma,
+                 dofs.Num_Gamma,
+                 Gedim::ISparseArray::SparseArrayTypes::Symmetric);
+
+    f_I.SetSize(dofs.Num_Internals);
+    f_G.SetSize(dofs.Num_Gamma);
+
+    u_I.SetSize(dofs.Num_Internals);
+    u_G.SetSize(dofs.Num_Gamma);
 
     DD_Utilities::Assemble(rank,
                            problem_info,
@@ -236,22 +248,23 @@ namespace DOMAIN_DECOMPOSITION
                            meshGeometricData.Cell2DsVertices,
                            meshGeometricData.Cell2DsAreas,
                            dofs,
-                           globalMatrixA,
-                           rightHandSide);
+                           A_II,
+                           A_IG,
+                           A_GI,
+                           A_GG,
+                           f_I,
+                           f_G);
 
     DD_Utilities::PrintMessage(rank, cout, "Assemble System FEM SUCCESS", false);
 
     /// Solve
     DD_Utilities::PrintMessage(rank, cout, "Solve...", false);
 
-    if (numDofs > 0)
-    {
-      Gedim::Eigen_CholeskySolver<> choleskySolver;
-      choleskySolver.Initialize(globalMatrixA,
-                                rightHandSide,
-                                internalSolution);
-      choleskySolver.Solve();
-    }
+    Gedim::Eigen_CholeskySolver<> choleskySolver;
+    choleskySolver.Initialize(A_II,
+                              f_I,
+                              u_I);
+    choleskySolver.Solve();
 
     DD_Utilities::PrintMessage(rank, cout, "Solve SUCCESS", false);
 
@@ -264,7 +277,7 @@ namespace DOMAIN_DECOMPOSITION
                                 meshGeometricData.Cell2DsVertices,
                                 meshGeometricData.Cell2DsAreas,
                                 dofs,
-                                internalSolution,
+                                u_I,
                                 errorL2_mesh,
                                 errorH1_mesh);
 
@@ -274,7 +287,8 @@ namespace DOMAIN_DECOMPOSITION
     DD_Utilities::ExportErrorToStream(rank,
                                       1,
                                       domainMesh.Cell2DTotalNumber(),
-                                      numDofs,
+                                      dofs.Num_Internals,
+                                      dofs.Num_Gamma,
                                       h,
                                       errorL2,
                                       errorH1,
@@ -293,11 +307,12 @@ namespace DOMAIN_DECOMPOSITION
       DD_Utilities::ExportErrorToStream(rank,
                                         1,
                                         domainMesh.Cell2DTotalNumber(),
-                                        numDofs,
+                                        dofs.Num_Internals,
+                                        dofs.Num_Gamma,
                                         h,
                                         errorL2,
                                         errorH1,
-                                        true,
+                                        errorFileExists,
                                         errorFile,
                                         ',');
       errorFile.close();
@@ -312,7 +327,7 @@ namespace DOMAIN_DECOMPOSITION
                                       problem_info,
                                       dofs,
                                       domainMesh,
-                                      internalSolution,
+                                      u_I,
                                       exportVtuFolder);
 
     // Export the local domain mesh

@@ -130,8 +130,12 @@ namespace DOMAIN_DECOMPOSITION
                            const std::vector<Eigen::MatrixXd>& squaresVertices,
                            const std::vector<double>& squaresArea,
                            const DOF_Info& dofs,
-                           Gedim::ISparseArray& globalMatrixA,
-                           Gedim::IArray& rightHandSide);
+                           Gedim::ISparseArray& A_II,
+                           Gedim::ISparseArray& A_IG,
+                           Gedim::ISparseArray& A_GI,
+                           Gedim::ISparseArray& A_GG,
+                           Gedim::IArray& f_I,
+                           Gedim::IArray& f_G);
 
       static void ComputeErrors(const int& rank,
                                 const Problem_Info& problem_info,
@@ -153,7 +157,8 @@ namespace DOMAIN_DECOMPOSITION
       static void ExportErrorToStream(const int& rank,
                                       const unsigned int& femOrder,
                                       const unsigned int& numCell2Ds,
-                                      const unsigned int& numDofs,
+                                      const unsigned int& numInternals,
+                                      const unsigned int& numGamma,
                                       const double& h,
                                       const double& errorL2,
                                       const double& errorH1,

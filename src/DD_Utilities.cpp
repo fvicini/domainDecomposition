@@ -355,8 +355,12 @@ namespace DOMAIN_DECOMPOSITION
                               const std::vector<Eigen::MatrixXd>& squaresVertices,
                               const std::vector<double>& squaresArea,
                               const DOF_Info& dofs,
-                              Gedim::ISparseArray& globalMatrixA,
-                              Gedim::IArray& rightHandSide)
+                              Gedim::ISparseArray& A_II,
+                              Gedim::ISparseArray& A_IG,
+                              Gedim::ISparseArray& A_GI,
+                              Gedim::ISparseArray& A_GG,
+                              Gedim::IArray& f_I,
+                              Gedim::IArray& f_G)
   {
     Eigen::MatrixXd referenceSquare_quadraturePoints;
     Eigen::VectorXd referenceSquare_quadratureWeights;
@@ -432,39 +436,88 @@ namespace DOMAIN_DECOMPOSITION
               DOF_Info::DOF::Types::Dirichlet)
             continue;
 
-          const unsigned int i_glb = dofs.Cell0Ds_DOF[i_mesh_point_index].Type ==
-                                     DOF_Info::DOF::Types::Internal ?
-                                       dofs.Cell0Ds_DOF[i_mesh_point_index].GlobalIndex :
-                                       dofs.Num_Internals +
-                                       dofs.Cell0Ds_DOF[i_mesh_point_index].GlobalIndex;
-
-          rightHandSide.AddValue(i_glb,
-                                 f[i_loc]);
-
-          for (unsigned int j_loc = 0; j_loc < localSpace.NumberBasisFunctions; j_loc++)
+          if (dofs.Cell0Ds_DOF[i_mesh_point_index].Type ==
+              DOF_Info::DOF::Types::Internal)
           {
-            const unsigned int j_mesh_point_index = square_info.Points_Index.at(j_loc);
+            const unsigned int i_glb = dofs.Cell0Ds_DOF[i_mesh_point_index].GlobalIndex;
+            f_I.AddValue(i_glb,
+                         f[i_loc]);
 
-            if (dofs.Cell0Ds_DOF[j_mesh_point_index].Type ==
-                DOF_Info::DOF::Types::Dirichlet)
-              continue;
+            for (unsigned int j_loc = 0; j_loc < localSpace.NumberBasisFunctions; j_loc++)
+            {
+              const unsigned int j_mesh_point_index = square_info.Points_Index.at(j_loc);
 
-            const unsigned int j_glb = dofs.Cell0Ds_DOF[j_mesh_point_index].Type ==
-                                       DOF_Info::DOF::Types::Internal ?
-                                         dofs.Cell0Ds_DOF[j_mesh_point_index].GlobalIndex :
-                                         dofs.Num_Internals +
-                                         dofs.Cell0Ds_DOF[j_mesh_point_index].GlobalIndex;
+              if (dofs.Cell0Ds_DOF[j_mesh_point_index].Type ==
+                  DOF_Info::DOF::Types::Dirichlet)
+                continue;
 
-            globalMatrixA.Triplet(i_glb,
-                                  j_glb,
-                                  A(i_loc, j_loc));
+              if (dofs.Cell0Ds_DOF[j_mesh_point_index].Type ==
+                  DOF_Info::DOF::Types::Internal)
+              {
+                const unsigned int j_glb = dofs.Cell0Ds_DOF[j_mesh_point_index].GlobalIndex;
+                A_II.Triplet(i_glb,
+                             j_glb,
+                             A(i_loc, j_loc));
+              }
+              else if (dofs.Cell0Ds_DOF[j_mesh_point_index].Type ==
+                       DOF_Info::DOF::Types::Gamma)
+              {
+                const unsigned int j_glb = dofs.Cell0Ds_DOF[j_mesh_point_index].GlobalIndex;
+                A_IG.Triplet(i_glb,
+                             j_glb,
+                             A(i_loc, j_loc));
+              }
+              else
+                throw runtime_error("Unknown J DOF type");
+            }
           }
+          else if (dofs.Cell0Ds_DOF[i_mesh_point_index].Type ==
+                   DOF_Info::DOF::Types::Gamma)
+          {
+            const unsigned int i_glb = dofs.Cell0Ds_DOF[i_mesh_point_index].GlobalIndex;
+            f_G.AddValue(i_glb,
+                         f[i_loc]);
+
+            for (unsigned int j_loc = 0; j_loc < localSpace.NumberBasisFunctions; j_loc++)
+            {
+              const unsigned int j_mesh_point_index = square_info.Points_Index.at(j_loc);
+
+              if (dofs.Cell0Ds_DOF[j_mesh_point_index].Type ==
+                  DOF_Info::DOF::Types::Dirichlet)
+                continue;
+
+              if (dofs.Cell0Ds_DOF[j_mesh_point_index].Type ==
+                  DOF_Info::DOF::Types::Internal)
+              {
+                const unsigned int j_glb = dofs.Cell0Ds_DOF[j_mesh_point_index].GlobalIndex;
+                A_GI.Triplet(i_glb,
+                             j_glb,
+                             A(i_loc, j_loc));
+              }
+              else if (dofs.Cell0Ds_DOF[j_mesh_point_index].Type ==
+                       DOF_Info::DOF::Types::Gamma)
+              {
+                const unsigned int j_glb = dofs.Cell0Ds_DOF[j_mesh_point_index].GlobalIndex;
+                A_GG.Triplet(i_glb,
+                             j_glb,
+                             A(i_loc, j_loc));
+              }
+              else
+                throw runtime_error("Unknown J DOF type");
+            }
+          }
+          else
+            throw runtime_error("Unknown I DOF type");
         }
       }
     }
 
-    rightHandSide.Create();
-    globalMatrixA.Create();
+    f_I.Create();
+    f_G.Create();
+    A_II.Create();
+    A_IG.Create();
+    A_GI.Create();
+    A_GG.Create();
   }
   // ***************************************************************************
   void DD_Utilities::ComputeErrors(const int& rank,
@@ -652,7 +705,8 @@ namespace DOMAIN_DECOMPOSITION
   void DD_Utilities::ExportErrorToStream(const int& rank,
                                          const unsigned int& femOrder,
                                          const unsigned int& numCell2Ds,
-                                         const unsigned int& numDofs,
+                                         const unsigned int& numInternals,
+                                         const unsigned int& numGamma,
                                          const double& h,
                                          const double& errorL2,
                                          const double& errorH1,
@@ -667,7 +721,8 @@ namespace DOMAIN_DECOMPOSITION
     {
       out<< "FemOrder" << separator;
       out<< "Cell2Ds" <<  separator;
-      out<< "Dofs" <<  separator;
+      out<< "NumInternals" <<  separator;
+      out<< "NumGamma" <<  separator;
       out<< "h" <<  separator;
       out<< "L2" <<  separator;
       out<< "H1" << endl;
@@ -676,7 +731,8 @@ namespace DOMAIN_DECOMPOSITION
     out.precision(16);
     out<< scientific<< femOrder<< separator;
     out<< scientific<< numCell2Ds<< separator;
-    out<< scientific<< numDofs<< separator;
+    out<< scientific<< numInternals<< separator;
+    out<< scientific<< numGamma<< separator;
     out<< scientific<< h << separator;
     out<< scientific<< errorL2<< separator;
     out<< scientific<< errorH1<< endl;
