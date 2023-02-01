@@ -140,7 +140,7 @@ namespace DOMAIN_DECOMPOSITION
                                                                                domainMesh);
 
     DD_Utilities::PrintMessage(rank,
-                               cerr,
+                               cout,
                                "n_1D_points: " +
                                to_string(problem_info.Num_1D_points) + " " +
                                "n_1D_squares: " +
@@ -173,7 +173,7 @@ namespace DOMAIN_DECOMPOSITION
     DD_Utilities::PrintMessage(rank, cout, "Compute domain geometric properties SUCCESS", false);
 
     DD_Utilities::PrintMessage(rank,
-                               cerr,
+                               cout,
                                "n_domains: " +
                                to_string(n_domains) + " " +
                                "n_1D_domains: " +
@@ -181,7 +181,7 @@ namespace DOMAIN_DECOMPOSITION
                                , true);
 
     DD_Utilities::PrintMessage(rank,
-                               cerr,
+                               cout,
                                "n_1D_points_domain: " +
                                to_string(problem_info.Num_1D_points_domain) + " " +
                                "n_1D_squares_domain: " +
@@ -206,7 +206,7 @@ namespace DOMAIN_DECOMPOSITION
     DD_Utilities::PrintMessage(rank, cout, "Compute DOFs SUCCESS", false);
 
     DD_Utilities::PrintMessage(rank,
-                               cerr,
+                               cout,
                                "dofs.Num_Dirichlets: " +
                                to_string(dofs.Num_Dirichlets) + " " +
                                "dofs.Num_Internals: " +
@@ -301,7 +301,7 @@ namespace DOMAIN_DECOMPOSITION
                                       errorL2,
                                       errorH1,
                                       true,
-                                      cerr,
+                                      cout,
                                       ',');
 
     if (rank == 0)

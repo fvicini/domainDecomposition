@@ -1,6 +1,7 @@
 #include "DD_Utilities.hpp"
 
 #include "Eigen_CholeskySolver.hpp"
+#include "Eigen_LUSolver.hpp"
 #include "Eigen_Array.hpp"
 #include "Fem2DSquareLagrangePCC.hpp"
 #include "PDE_Equation.hpp"
@@ -105,10 +106,8 @@ namespace DOMAIN_DECOMPOSITION
     rhs_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
     Sp.SetSize(dofs.Num_Gamma);
 
-    // compute rhs_I = - A_IG * p
-    rhs_I.SubtractionMultiplication(A_IG, p);
-
     // solve A_II w_I = - A_IG * p
+    rhs_I.SubtractionMultiplication(A_IG, p);
     A_II_solver.Solve(rhs_I, w_I);
 
     // compute Sp = sum_domain A_GI * w_I + A_GG * p
@@ -140,16 +139,16 @@ namespace DOMAIN_DECOMPOSITION
     double r_k_1_dot = r_0_dot;
     double r_k_dot = r_0_dot;
 
+    if (rank == 0)
+    {
+      cout<< scientific<< "Schur Solver"<< " ";
+      cout<< "it "<< iteration<< "/"<< max_iterations<< " ";
+      cout<< "res "<< sqrt(r_k_dot)<< "/"<< tolerance * sqrt(r_0_dot)<< endl;
+    }
+
     while (r_k_dot > tolerance * tolerance * r_0_dot &&
            iteration < max_iterations)
     {
-      if (rank == 0)
-      {
-        cout<< scientific<< "Schur Solver"<< " ";
-        cout<< "it "<< iteration<< "/"<< max_iterations<< " ";
-        cout<< "res "<< sqrt(r_k_dot)<< "/"<< tolerance * sqrt(r_0_dot)<< endl;
-      }
-
       beta_k = (!conjugate || iteration == 0) ? 0.0 : r_k_dot / r_k_1_dot;
 
       // compute p_k = r_k + beta_k * p_k_1
@@ -175,6 +174,75 @@ namespace DOMAIN_DECOMPOSITION
       r_k_1_dot = r_k_dot;
 
       r_k -= (Sp_k * alpha_k);
+      r_k_dot = r_k.Dot(r_k);
+
+      iteration++;
+
+      if (rank == 0)
+      {
+        cout<< scientific<< "Schur Solver"<< " ";
+        cout<< "it "<< iteration<< "/"<< max_iterations<< " ";
+        cout<< "res "<< sqrt(r_k_dot)<< "/"<< tolerance * sqrt(r_0_dot)<< endl;
+      }
+    }
+  }
+  // ***************************************************************************
+  void DD_Utilities::AII_Solver(const int& rank,
+                                const DOF_Info& dofs,
+                                const Gedim::ISparseArray& A_II,
+                                const Gedim::ISparseArray& A_IG,
+                                const Gedim::ISparseArray& A_GI,
+                                const Gedim::ISparseArray& A_GG,
+                                const Gedim::IArray& f_I,
+                                const unsigned int& max_iterations,
+                                const double& tolerance,
+                                const bool& conjugate,
+                                Gedim::IArray& u_I)
+  {
+    Gedim::Eigen_Array<> r_k, p_k;
+    r_k.Copy(f_I);
+    p_k.Copy(r_k);
+
+    Gedim::Eigen_Array<> A_pk;
+    A_pk.SetSize(dofs.Domains_DOF[rank].Num_Internals);
+
+    double beta_k = 0.0, alpha_k = 0.0;
+    unsigned int iteration = 0;
+
+    double r_0_dot = r_k.Dot(r_k);
+    double r_k_1_dot = r_0_dot;
+    double r_k_dot = r_0_dot;
+
+    while (r_k_dot > tolerance * tolerance * r_0_dot &&
+           iteration < max_iterations)
+    {
+      if (rank == 0)
+      {
+        cout<< scientific<< "AII Solver"<< " ";
+        cout<< "it "<< iteration<< "/"<< max_iterations<< " ";
+        cout<< "res "<< sqrt(r_k_dot)<< "/"<< tolerance * sqrt(r_0_dot)<< endl;
+      }
+
+      // compute beta_k = <r_k, r_k> / <r_k_1, r_k_1>
+      beta_k = (!conjugate || iteration == 0) ? 0.0 : r_k_dot / r_k_1_dot;
+
+      // compute p_k = r_k + beta_k * p_k_1
+      p_k *= beta_k;
+      p_k += r_k; // Conjugate Gradient
+
+      // compute alpha_k = <r_k, r_k> / <p_k, A * p_k>
+      A_pk.Zeros();
+      A_pk.SumMultiplication(A_II, p_k);
+      alpha_k = r_k_dot / p_k.Dot(A_pk);
+
+      // compute u_G_k = u_G_k_1 + alpha_k * p_k
+      u_I += (p_k * alpha_k);
+
+      // save <r_k_1, r_k_1>
+      r_k_1_dot = r_k_dot;
+
+      // compute r_k = r_k_1 - alpha_k * S * p_k
+      r_k -= (A_pk * alpha_k);
       r_k_dot = r_k.Dot(r_k);
 
       iteration++;
@@ -484,15 +552,13 @@ namespace DOMAIN_DECOMPOSITION
                               Gedim::IArray& f_G)
   {
     A_II.SetSize(dofs.Domains_DOF[rank].Num_Internals,
-                 dofs.Domains_DOF[rank].Num_Internals,
-                 Gedim::ISparseArray::SparseArrayTypes::Symmetric);
+                 dofs.Domains_DOF[rank].Num_Internals);
     A_IG.SetSize(dofs.Domains_DOF[rank].Num_Internals,
                  dofs.Num_Gamma);
     A_GI.SetSize(dofs.Num_Gamma,
                  dofs.Domains_DOF[rank].Num_Internals);
     A_GG.SetSize(dofs.Num_Gamma,
-                 dofs.Num_Gamma,
-                 Gedim::ISparseArray::SparseArrayTypes::Symmetric);
+                 dofs.Num_Gamma);
 
     f_I.SetSize(dofs.Domains_DOF[rank].Num_Internals);
     f_G.SetSize(dofs.Num_Gamma);
@@ -681,7 +747,7 @@ namespace DOMAIN_DECOMPOSITION
     u_G.SetSize(dofs.Num_Gamma);
 
     // compute cholesky factorization of A_II
-    Gedim::Eigen_CholeskySolver<> A_II_solver;
+    Gedim::Eigen_LUSolver<> A_II_solver;
     A_II_solver.Initialize(A_II);
 
     if (dofs.Num_Gamma == 0)
@@ -706,8 +772,6 @@ namespace DOMAIN_DECOMPOSITION
     g.SubtractionMultiplication(A_GI, h_I);
     MPI_Allreduce(MPI_IN_PLACE, g.Data(), g.Size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-    PrintArray(rank, "g", g);
-
     // solve S u_G = g with CG
     ShurSolver(rank,
                dofs,
@@ -722,8 +786,8 @@ namespace DOMAIN_DECOMPOSITION
                u_G);
 
     // solve A_II * u_i = f_I - A_IG * u_g
-    rhs_I.SubtractionMultiplication(A_IG, u_G);
     rhs_I += f_I;
+    rhs_I.SubtractionMultiplication(A_IG, u_G);
 
     A_II_solver.Solve(rhs_I, u_I);
   }

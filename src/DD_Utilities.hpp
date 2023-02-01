@@ -126,6 +126,18 @@ namespace DOMAIN_DECOMPOSITION
                              const bool& conjugate,
                              Gedim::IArray& u_G);
 
+      static void AII_Solver(const int& rank,
+                             const DOF_Info& dofs,
+                             const Gedim::ISparseArray& A_II,
+                             const Gedim::ISparseArray& A_IG,
+                             const Gedim::ISparseArray& A_GI,
+                             const Gedim::ISparseArray& A_GG,
+                             const Gedim::IArray& f_I,
+                             const unsigned int& max_iterations,
+                             const double& tolerance,
+                             const bool& conjugate,
+                             Gedim::IArray& u_G);
+
       static void PrintArray(const int& rank,
                              const std::string& v_name,
                              const Gedim::IArray& v);
