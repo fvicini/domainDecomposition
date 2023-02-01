@@ -115,13 +115,10 @@ namespace DOMAIN_DECOMPOSITION
     A_GI_w.SumMultiplication(A_GI, w_I);
 
     // compute on master sum_domain A_GI * w_I
-    MPI_Reduce(A_GI_w.Data(), Sp.Data(), Sp.Size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Allreduce(A_GI_w.Data(), Sp.Data(), Sp.Size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-    if (rank == 0)
-    {
-      // compute Sp = sum_domain A_GI * h_I + A_GG * p
-      Sp.SumMultiplication(A_GG, p);
-    }
+    // compute Sp = sum_domain A_GI * h_I + A_GG * p
+    Sp.SumMultiplication(A_GG, p);
   }
   // ***************************************************************************
   void DD_Utilities::ShurCG(const int& rank,
@@ -130,11 +127,52 @@ namespace DOMAIN_DECOMPOSITION
                             const Gedim::ISparseArray& A_IG,
                             const Gedim::ISparseArray& A_GI,
                             const Gedim::ISparseArray& A_GG,
-                            const Gedim::IArray& u_G_0,
-                            const unsigned int& numIterations,
+                            const Gedim::IArray& g,
+                            const unsigned int& max_iterations,
                             const double& tolerance,
                             Gedim::IArray& u_G)
   {
+    Gedim::Eigen_Array<> r_k, r_k_1, p_k, Sp_k;
+    r_k_1.Copy(g);
+    r_k.Copy(r_k_1);
+    p_k.Copy(r_k_1);
+
+    double beta_k = 0.0, alpha_k = 0.0;
+    unsigned int iteration = 0;
+    double r_0_norm = r_k_1.Norm();
+    double r_k_norm = r_0_norm;
+
+    while (r_k_norm > tolerance * r_0_norm &&
+           iteration < max_iterations)
+    {
+      if (rank == 0)
+      {
+        cout<< scientific<< "CG"<< " ";
+        cout<< "it "<< iteration<< "/"<< max_iterations<< " ";
+        cout<< "res "<< r_k_norm<< "/"<< tolerance<< endl;
+      }
+
+      beta_k = (iteration == 0) ? 0.0 : r_k.Dot(r_k) / r_k_1.Dot(r_k_1);
+      p_k = (iteration == 0) ? r_k_1 : (r_k + p_k * beta_k);
+
+      ApplyShurToArray(rank,
+                       dofs,
+                       A_II_solver,
+                       A_IG,
+                       A_GI,
+                       A_GG,
+                       p_k,
+                       Sp_k);
+
+      alpha_k = r_k.Dot(r_k) / p_k.Dot(Sp_k);
+
+      u_G += p_k * alpha_k;
+
+      r_k_1.Copy(r_k);
+      r_k = r_k_1 - Sp_k * alpha_k;
+
+      iteration++;
+    }
   }
   // ***************************************************************************
   DD_Utilities::Problem_Info DD_Utilities::ComputeProblemInfo(const int& rank,
@@ -652,16 +690,22 @@ namespace DOMAIN_DECOMPOSITION
     g_A_GI_h.SubtractionMultiplication(A_GI, h_I);
 
     // compute on master -sum_domain A_GI * h_I
-    MPI_Reduce(g_A_GI_h.Data(), g.Data(), g.Size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Allreduce(g_A_GI_h.Data(), g.Data(), g.Size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-    if (rank == 0)
-    {
-      // compute g = f_G - sum_domain A_GI * h_I
-      g += f_G;
-    }
+    // compute g = f_G - sum_domain A_GI * h_I
+    g += f_G;
 
     // solve S u_G = g with CG
-
+    ShurCG(rank,
+           dofs,
+           A_II_solver,
+           A_IG,
+           A_GI,
+           A_GG,
+           g,
+           1000,
+           1.0e-6,
+           u_G);
   }
   // ***************************************************************************
   void DD_Utilities::ComputeErrors(const int& rank,

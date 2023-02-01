@@ -120,8 +120,8 @@ namespace DOMAIN_DECOMPOSITION
                          const Gedim::ISparseArray& A_IG,
                          const Gedim::ISparseArray& A_GI,
                          const Gedim::ISparseArray& A_GG,
-                         const Gedim::IArray& u_G_0,
-                         const unsigned int& numIterations,
+                         const Gedim::IArray& g,
+                         const unsigned int& max_iterations,
                          const double& tolerance,
                          Gedim::IArray& u_G);
 
