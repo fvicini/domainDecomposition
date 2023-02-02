@@ -1,0 +1,17 @@
+#!/bin/bash
+
+#SBATCH --job-name=<name_job>
+#SBATCH --output=output_%x_pid_%j.txt
+#SBATCH --error=errors_%x_pid_%j.txt
+#SBATCH --partition=<name_of_partition>
+#SBATCH --mem=10GB
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=16
+#SBATCH --cpus-per-task=1
+#SBATCH --time=00:01:00
+#SBATCH --mail-user fabio.vicini@polito.it
+#SBATCH --mail-type ALL
+
+module load <modules to be loaded>
+
+srun ./DOMAIN_DECOMPOSITION ExportFolder:string="./Run_N16" MeshParameter:double=0.0078125 SchurSolverMaxIterations:uint=100 SchurSolverTolerance:double=1e-16 SchurSolverType:bool=1
