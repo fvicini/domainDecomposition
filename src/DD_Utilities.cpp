@@ -86,8 +86,10 @@ namespace DOMAIN_DECOMPOSITION
     }
 
     {
+      const string processesTimeFolder = exportFolder + "/Processes";
+      Gedim::Output::CreateFolder(processesTimeFolder);
       // export local elapsed time
-      string filePath = exportFolder + "/Time_" + to_string(rank) + ".csv";
+      string filePath = processesTimeFolder + "/Time_" + to_string(rank) + ".csv";
       const bool fileExists = Gedim::Output::FileExists(filePath);
       ofstream outFile(filePath,
                        ios_base::app);
@@ -114,7 +116,7 @@ namespace DOMAIN_DECOMPOSITION
                                  const std::string& exportFolder)
   {
 
-    const double totalTime = std::accumulate(elapsedTimes.begin(), elapsedTimes.end(), 0);
+    const double totalTime = std::accumulate(elapsedTimes.begin(), elapsedTimes.end(), 0.0);
     double maxTotalTime = 0.0;
     MPI_Reduce(&totalTime, &maxTotalTime, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
@@ -141,7 +143,9 @@ namespace DOMAIN_DECOMPOSITION
 
     {
       // export local elapsed time
-      string filePath = exportFolder + "/Time_" + to_string(rank) + ".csv";
+      const string processesTimeFolder = exportFolder + "/Processes";
+      Gedim::Output::CreateFolder(processesTimeFolder);
+      string filePath = processesTimeFolder + "/Time_" + to_string(rank) + ".csv";
       const bool fileExists = Gedim::Output::FileExists(filePath);
       ofstream outFile(filePath,
                        ios_base::app);
