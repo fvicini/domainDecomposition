@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.9)
 
 project(DOMAIN_DECOMPOSITION LANGUAGES CXX C)
 
+# Set C++ Standard
+###########################################################################################
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # Create variables
 ###############################################################################################
 set(DOMAIN_DECOMPOSITION_SOURCES ${PROJECT_NAME}_sources)
