@@ -1,5 +1,7 @@
 #include "DD_Utilities.hpp"
 
+#include <numeric>
+
 #include "Eigen_CholeskySolver.hpp"
 #include "Eigen_LUSolver.hpp"
 #include "Eigen_Array.hpp"
@@ -44,6 +46,117 @@ namespace DOMAIN_DECOMPOSITION
         PrintMessage(rank, cerr, message, false);
 
       MPI_Abort(MPI_COMM_WORLD, -1);
+    }
+  }
+  // ***************************************************************************
+  double DD_Utilities::StartTime()
+  {
+    return MPI::Wtime();
+  }
+  // ***************************************************************************
+  double DD_Utilities::StopTime(const int& rank,
+                                const int& n_domains,
+                                const double& startTime,
+                                const std::string& label,
+                                const std::string& exportFolder)
+  {
+    double elapsedTime = MPI::Wtime() - startTime;
+    double maxElapsedTime = 0.0;
+    MPI_Reduce(&elapsedTime, &maxElapsedTime, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+    if (rank == 0)
+    {
+      // export max elapsed time
+      string filePath = exportFolder + "/Time.csv";
+      const bool fileExists = Gedim::Output::FileExists(filePath);
+      ofstream outFile(filePath,
+                       ios_base::app);
+      outFile.precision(16);
+
+      if(!fileExists)
+      {
+        outFile<< "Numdomains"<< " ";
+        outFile<< "Label"<< " ";
+        outFile<< "ElapsedTime"<< endl;
+      }
+
+      outFile<< scientific<< n_domains<< " ";
+      outFile<< scientific<< label<< " ";
+      outFile<< scientific<< maxElapsedTime<< endl;
+    }
+
+    {
+      // export local elapsed time
+      string filePath = exportFolder + "/Time_" + to_string(rank) + ".csv";
+      const bool fileExists = Gedim::Output::FileExists(filePath);
+      ofstream outFile(filePath,
+                       ios_base::app);
+      outFile.precision(16);
+
+      if(!fileExists)
+      {
+        outFile<< "Numdomains"<< " ";
+        outFile<< "Label"<< " ";
+        outFile<< "ElapsedTime"<< endl;
+      }
+
+      outFile<< scientific<< n_domains<< " ";
+      outFile<< scientific<< label<< " ";
+      outFile<< scientific<< elapsedTime<< endl;
+    }
+
+    return elapsedTime;
+  }
+  // ***************************************************************************
+  void DD_Utilities::ExportTimes(const int& rank,
+                                 const int& n_domains,
+                                 const std::vector<double>& elapsedTimes,
+                                 const std::string& exportFolder)
+  {
+
+    const double totalTime = std::accumulate(elapsedTimes.begin(), elapsedTimes.end(), 0);
+    double maxTotalTime = 0.0;
+    MPI_Reduce(&totalTime, &maxTotalTime, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+    if (rank == 0)
+    {
+      // export max total elapsed time
+      string filePath = exportFolder + "/Time.csv";
+      const bool fileExists = Gedim::Output::FileExists(filePath);
+      ofstream outFile(filePath,
+                       ios_base::app);
+      outFile.precision(16);
+
+      if(!fileExists)
+      {
+        outFile<< "Numdomains"<< " ";
+        outFile<< "Label"<< " ";
+        outFile<< "ElapsedTime"<< endl;
+      }
+
+      outFile<< scientific<< n_domains<< " ";
+      outFile<< scientific<< "Total"<< " ";
+      outFile<< scientific<< maxTotalTime<< endl;
+    }
+
+    {
+      // export local elapsed time
+      string filePath = exportFolder + "/Time_" + to_string(rank) + ".csv";
+      const bool fileExists = Gedim::Output::FileExists(filePath);
+      ofstream outFile(filePath,
+                       ios_base::app);
+      outFile.precision(16);
+
+      if(!fileExists)
+      {
+        outFile<< "Numdomains"<< " ";
+        outFile<< "Label"<< " ";
+        outFile<< "ElapsedTime"<< endl;
+      }
+
+      outFile<< scientific<< n_domains<< " ";
+      outFile<< scientific<< "Total"<< " ";
+      outFile<< scientific<< totalTime<< endl;
     }
   }
   // ***************************************************************************

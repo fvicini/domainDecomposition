@@ -155,6 +155,17 @@ namespace DOMAIN_DECOMPOSITION
                          const bool& result,
                          const std::string& message = "");
 
+      static double StartTime();
+      static double StopTime(const int& rank,
+                             const int& n_domains,
+                             const double& startTime,
+                             const std::string& label,
+                             const std::string& exportFolder);
+      static void ExportTimes(const int& rank,
+                              const int& n_domains,
+                              const std::vector<double>& elapsedTimes,
+                              const std::string& exportFolder);
+
       static Problem_Info ComputeProblemInfo(const int& rank,
                                              const int& n_domains,
                                              const Gedim::IMeshDAO& globalMesh);

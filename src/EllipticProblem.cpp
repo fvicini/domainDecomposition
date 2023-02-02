@@ -67,7 +67,6 @@ namespace DOMAIN_DECOMPOSITION
     const string exportFolder = config.ExportFolder();
     if (rank == 0)
       Gedim::Output::CreateFolder(exportFolder);
-
     const string exportCsvFolder = exportFolder + "/Mesh";
     if (rank == 0)
       Gedim::Output::CreateFolder(exportCsvFolder);
@@ -80,6 +79,9 @@ namespace DOMAIN_DECOMPOSITION
     const string exportSolutionFolder = exportFolder + "/Solution";
     if (rank == 0)
       Gedim::Output::CreateFolder(exportSolutionFolder);
+    const string timeFolder = exportFolder + "/Time";
+    if (rank == 0)
+      Gedim::Output::CreateFolder(timeFolder);
 
     const string logFolder = exportFolder + "/Log";
 
@@ -93,9 +95,12 @@ namespace DOMAIN_DECOMPOSITION
       Gedim::Output::CreateFolder(logFolder);
     Gedim::LogFile::LogFolder = logFolder;
 
+    std::list<double> startTimes, elapsedTimes;
+
     /// Create problem
     DD_Utilities::PrintMessage(rank, cout, "Create Domain...", false);
 
+    startTimes.push_back(DD_Utilities::StartTime());
     const Eigen::Vector3d rectangleOrigin(0.0, 0.0, 0.0);
     const Eigen::Vector3d rectangleBase(1.0, 0.0, 0.0);
     const Eigen::Vector3d rectangleHeight(0.0, 1.0, 0.0);
@@ -103,6 +108,11 @@ namespace DOMAIN_DECOMPOSITION
     const Eigen::MatrixXd domain = geometryUtilities.CreateParallelogram(rectangleOrigin,
                                                                          rectangleBase,
                                                                          rectangleHeight);
+    elapsedTimes.push_back(DD_Utilities::StopTime(rank,
+                                                  n_domains,
+                                                  startTimes.back(),
+                                                  "create_domain",
+                                                  timeFolder));
 
     DD_Utilities::PrintMessage(rank, cout, "Create Domain SUCCESS", false);
 
@@ -122,6 +132,7 @@ namespace DOMAIN_DECOMPOSITION
                                to_string(config.MeshParameter()) +
                                "...", false);
 
+    startTimes.push_back(DD_Utilities::StartTime());
     Gedim::MeshMatrices domainMeshData;
     Gedim::MeshMatricesDAO domainMesh(domainMeshData);
 
@@ -138,6 +149,11 @@ namespace DOMAIN_DECOMPOSITION
     DD_Utilities::Problem_Info problem_info = DD_Utilities::ComputeProblemInfo(rank,
                                                                                n_domains,
                                                                                domainMesh);
+    elapsedTimes.push_back(DD_Utilities::StopTime(rank,
+                                                  n_domains,
+                                                  startTimes.back(),
+                                                  "create_mesh",
+                                                  timeFolder));
 
     DD_Utilities::PrintMessage(rank,
                                cout,
@@ -164,12 +180,19 @@ namespace DOMAIN_DECOMPOSITION
     DD_Utilities::PrintMessage(rank, cout, "Export Domain Mesh SUCCESS", true);
 
     DD_Utilities::PrintMessage(rank, cout, "Compute domain geometric properties...", false);
+    startTimes.push_back(DD_Utilities::StartTime());
     Gedim::MeshUtilities::MeshGeometricData2D meshGeometricData = meshUtilities.FillMesh2DGeometricData(geometryUtilities,
                                                                                                         domainMesh);
 
     const double H = 1.0 / problem_info.Num_1D_domains;
     const double h = *max_element(std::begin(meshGeometricData.Cell2DsDiameters),
                                   std::end(meshGeometricData.Cell2DsDiameters));
+
+    elapsedTimes.push_back(DD_Utilities::StopTime(rank,
+                                                  n_domains,
+                                                  startTimes.back(),
+                                                  "compute_geometric_properties",
+                                                  timeFolder));
 
     DD_Utilities::PrintMessage(rank, cout, "Compute domain geometric properties SUCCESS", false);
 
@@ -199,11 +222,18 @@ namespace DOMAIN_DECOMPOSITION
     DD_Utilities::PrintMessage(rank, cout, "Export Local Domain Mesh SUCCESS", false);
 
     DD_Utilities::PrintMessage(rank, cout, "Compute DOFs...", false);
+    startTimes.push_back(DD_Utilities::StartTime());
     // Compute DOFs
     DD_Utilities::DOF_Info dofs = DD_Utilities::CreateDOFs(rank,
                                                            n_domains,
                                                            problem_info,
                                                            domainMesh);
+    elapsedTimes.push_back(DD_Utilities::StopTime(rank,
+                                                  n_domains,
+                                                  startTimes.back(),
+                                                  "create_dofs",
+                                                  timeFolder));
+
     DD_Utilities::PrintMessage(rank, cout, "Compute DOFs SUCCESS", false);
 
     DD_Utilities::PrintMessage(rank,
@@ -232,6 +262,7 @@ namespace DOMAIN_DECOMPOSITION
     /// Assemble System
     DD_Utilities::PrintMessage(rank, cout, "Assemble System FEM...", false);
 
+    startTimes.push_back(DD_Utilities::StartTime());
     Gedim::Eigen_SparseArray<> A_II, A_IG, A_GI, A_GG;
     Gedim::Eigen_Array<> f_I, f_G;
     Gedim::Eigen_Array<> u_I, u_G;
@@ -252,12 +283,18 @@ namespace DOMAIN_DECOMPOSITION
                            A_GG,
                            f_I,
                            f_G);
+    elapsedTimes.push_back(DD_Utilities::StopTime(rank,
+                                                  n_domains,
+                                                  startTimes.back(),
+                                                  "assemble",
+                                                  timeFolder));
 
     DD_Utilities::PrintMessage(rank, cout, "Assemble System FEM SUCCESS", false);
 
     /// Solve
     DD_Utilities::PrintMessage(rank, cout, "Solve...", false);
 
+    startTimes.push_back(DD_Utilities::StartTime());
     DD_Utilities::Solve(rank,
                         problem_info,
                         domainMesh,
@@ -273,6 +310,12 @@ namespace DOMAIN_DECOMPOSITION
                         config.SchurSolverType(),
                         u_I,
                         u_G);
+
+    elapsedTimes.push_back(DD_Utilities::StopTime(rank,
+                                                  n_domains,
+                                                  startTimes.back(),
+                                                  "solve",
+                                                  timeFolder));
 
     DD_Utilities::PrintMessage(rank, cout, "Solve SUCCESS", false);
 
@@ -346,6 +389,11 @@ namespace DOMAIN_DECOMPOSITION
 
     // Export the local domain mesh
     DD_Utilities::PrintMessage(rank, cout, "Export Local Solution SUCCESS", false);
+
+    DD_Utilities::ExportTimes(rank,
+                              n_domains,
+                              std::vector<double>(elapsedTimes.begin(), elapsedTimes.end()),
+                              timeFolder);
   }
   // ***************************************************************************
 }
